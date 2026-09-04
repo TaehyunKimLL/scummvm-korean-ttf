@@ -1,0 +1,170 @@
+From cb1ad1403e2fd699ffdfe2992cbd6dda1169b321 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Thu, 3 Sep 2026 22:09:51 +0000
+Subject: [PATCH 05/18] SCUMM: Fix punctuation dropout and add Latin TTF
+ rendering
+
+Two problems with the Korean hi-res text, both around single byte
+characters.
+
+The alpha composite treated a zero coverage byte as "transparent", but
+characters drawn through the regular bitmap path never touch the
+coverage channel. Latin letters and punctuation were therefore keyed
+out completely - commas and parentheses simply vanished from the
+credits. Only the colour key means transparent; a glyph rendered with
+the TTF leaves the key in place where its coverage is zero, so the two
+paths do not collide.
+
+The second part is optional: with [latin] enabled in the font map the
+single byte characters go through the TrueType renderer as well, so a
+mixed line no longer shows a handwriting face next to the original 8px
+bitmap. Three gates had to be opened for that - the character hook
+itself, the double byte branch in printCharIntern(), and _curKorChar,
+which was cleared for anything below 256. The advance width still comes
+from the game's own font, so the layout and line breaks are unchanged.
+---
+ engines/scumm/charset.cpp | 44 +++++++++++++++++++++++++++++++++------
+ engines/scumm/gfx.cpp     |  8 +++++--
+ engines/scumm/scumm.h     |  2 ++
+ 3 files changed, 46 insertions(+), 8 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 730222ac..adefd058 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -407,6 +407,21 @@ void ScummEngine::loadKorTtfMap(const Common::Path &mapPath) {
+ 			_korTtfRoleSupersample[r] = super;
+ 	}
+ 
++	// Optional [latin] section: route the single byte characters (Latin
++	// letters, digits, punctuation) through the TrueType renderer as well,
++	// so a line does not mix TTF Hangul with the original bitmap glyphs.
++	//
++	//   [latin]
++	//   enabled=true      ; render 1 byte characters with the TTF too
++	//   font=<path>       ; optional, defaults to the Korean font
++	//
++	// The advance width still comes from the game's own font, so the text
++	// keeps its original layout and line breaks.
++	if (map.getKey("enabled", "latin", value))
++		_korTtfLatin = (value.equalsIgnoreCase("true") || atoi(value.c_str()) != 0);
++	if (map.getKey("font", "latin", value))
++		_korTtfLatinPath = Common::Path(value);
++
+ 	const Common::INIFile::SectionKeyList keys = map.getKeys("map");
+ 	for (Common::INIFile::SectionKeyList::const_iterator it = keys.begin(); it != keys.end(); ++it) {
+ 		if (it->key.hasPrefix("height_")) {
+@@ -569,7 +584,9 @@ bool ScummEngine::drawKorTtfChar(Graphics::Surface &dest, uint16 chr, int x, int
+ 	const uint8 hi = chr & 0xFF;
+ 	const uint8 lo = chr >> 8;
+ 
+-	const uint16 unicode = Common::convertUHCToUCS(hi, lo);
++	// Single byte characters are already their own code point; only the
++	// double byte ones need the CP949 -> Unicode conversion.
++	const uint16 unicode = (chr < 256) ? chr : Common::convertUHCToUCS(hi, lo);
+ 	if (!unicode)
+ 		return false;
+ 
+@@ -956,7 +973,13 @@ int CharsetRendererClassic::getCharWidth(uint16 chr) const {
+ // directly into the scaled hi-res text surface. Returns false when the TTF
+ // path doesn't apply, so the caller falls back to the bitmap renderer.
+ bool CharsetRendererCommon::drawHiResKorChar(Graphics::Surface &s, int x, int y, int drawTop, uint16 chr) {
+-	if (!_vm->isKoreanHiRes() || !_vm->_korTtfFont || chr < 256 || !_vm->_useCJKMode)
++	if (!_vm->isKoreanHiRes() || !_vm->_korTtfFont || !_vm->_useCJKMode)
++		return false;
++
++	// Single byte characters normally keep the game's own bitmap font. With
++	// [latin] enabled they go through the TrueType renderer too, so a mixed
++	// line does not show two different typefaces.
++	if (chr < 256 && !_vm->_korTtfLatin)
+ 		return false;
+ 
+ 	return _vm->drawKorTtfChar(s, chr, x, y, _color, _shadowColor);
+@@ -1438,7 +1461,9 @@ void CharsetRendererV3::printChar(int chr, bool ignoreCharsetMask) {
+ 		return;
+ 
+ 	if (_vm->isScummvmKorTarget()) {
+-		_curKorChar = is2byte ? static_cast<uint16>(chr) : 0;
++		// Keep the code point even for single byte characters: with [latin]
++		// enabled they are rendered with the TrueType font as well.
++		_curKorChar = (is2byte || _vm->_korTtfLatin) ? static_cast<uint16>(chr) : 0;
+ 		if (is2byte) {
+ 			charPtr = _vm->get2byteCharPtr(chr);
+ 			width = _vm->_2byteWidth;
+@@ -1544,7 +1569,7 @@ void CharsetRendererV3::drawChar(int chr, Graphics::Surface &s, int x, int y) {
+ 		height = getDrawHeightIntern(chr);
+ 	}
+ 	setDrawCharIntern(chr);
+-	if (is2byte && drawHiResKorChar(s, x, y, y, static_cast<uint16>(chr)))
++	if ((is2byte || _vm->_korTtfLatin) && drawHiResKorChar(s, x, y, y, static_cast<uint16>(chr)))
+ 		return;
+ 	drawBits1(s, x, y, charPtr, y, width, height);
+ }
+@@ -1617,7 +1642,7 @@ void CharsetRendererClassic::printChar(int chr, bool ignoreCharsetMask) {
+ 	translateColor();
+ 
+ 	_vm->_charsetColorMap[1] = _color;
+-	_curKorChar = (_vm->isScummvmKorTarget() && is2byte) ? (uint16)chr : 0;
++	_curKorChar = (_vm->isScummvmKorTarget() && (is2byte || _vm->_korTtfLatin)) ? (uint16)chr : 0;
+ 	if (_vm->isScummvmKorTarget() && is2byte) {
+ 		setShadowMode(kNormalShadowType);
+ 		_charPtr = _vm->get2byteCharPtr(chr);
+@@ -1806,7 +1831,7 @@ void CharsetRendererClassic::printCharIntern(bool is2byte, const byte *charPtr,
+ 			drawTop = _top - _vm->_screenTop;
+ 		}
+ 
+-		if (is2byte && _vm->_game.platform != Common::kPlatformFMTowns) {
++		if ((is2byte || (_vm->_korTtfLatin && _vm->isKoreanHiRes())) && _vm->_game.platform != Common::kPlatformFMTowns) {
+ 			int dx = (ignoreCharsetMask || !vs->hasTwoBuffers) ? _left + vs->xstart : _left;
+ 			int dy = drawTop;
+ 
+@@ -1826,6 +1851,13 @@ void CharsetRendererClassic::printCharIntern(bool is2byte, const byte *charPtr,
+ 				if (drawHiResKorChar(_vm->_textSurface, tx, ty, drawTop, _curKorChar))
+ 					goto charDrawn;
+ 
++				// Single byte characters have no double byte bitmap to fall
++				// back on, so let the regular renderer handle them.
++				if (!is2byte) {
++					drawBitsN(dstSurface, dstPtr, charPtr, *_fontPtr, drawTop, origWidth, origHeight);
++					goto charDrawn;
++				}
++
+ 				drawBits1(_vm->_textSurface, tx, ty, charPtr, ty, origWidth, origHeight);
+ 				goto charDrawn;
+ 			}
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index f4d5c87c..7d0b1772 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -871,9 +871,13 @@ void ScummEngine::compositeHiResText(const void *src, int srcPitch, int x, int y
+ 						const byte t = *tp++;
+ 						const byte a = *ap++;
+ 
+-						if (t == CHARSET_MASK_TRANSPARENCY || a == 0) {
++						if (t == CHARSET_MASK_TRANSPARENCY) {
+ 							*d++ = bg;
+-						} else if (a == 0xFF) {
++						} else if (a == 0 || a == 0xFF) {
++							// Characters drawn through the regular bitmap
++							// path (Latin letters, punctuation) leave the
++							// coverage channel untouched, so a zero there
++							// means "opaque", not "invisible".
+ 							*d++ = _korAlphaPalette[t];
+ 						} else {
+ 							// Blend the glyph colour over the background.
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index 1f056cd5..77bb1801 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1790,6 +1790,8 @@ public:
+ 	Common::Path _korTtfPath;
+ 	Common::Path _korTtfBoldPath;
+ 	Common::Path _korTtfTitlePath;
++	Common::Path _korTtfLatinPath;
++	bool _korTtfLatin = false;
+ 	Common::HashMap<int, int> _korTtfHeightRoles;
+ 	Common::HashMap<int, int> _korTtfRoleSizes;
+ 	Common::HashMap<int, int> _korTtfRoleSupersample;
+-- 
+2.43.0
+

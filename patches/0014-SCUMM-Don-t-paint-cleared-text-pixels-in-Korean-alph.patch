@@ -1,0 +1,49 @@
+From fc4ea824c59e576db6236722ba11b2bed7e112d3 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 01:31:52 +0000
+Subject: [PATCH 14/18] SCUMM: Don't paint cleared text pixels in Korean
+ alpha-text mode
+
+The composite treats anything that is not the colour key as text, so a
+pixel left at index zero - a spot the text surface was cleared to rather
+than keyed out - was painted with palette entry 0. On a static screen
+that goes unnoticed, but any area the game re-composites every frame
+ends up with a dark rectangle over the background.
+
+Require the coverage byte to be zero as well before writing the pixel
+off as empty, so genuinely black glyphs are still drawn.
+---
+ engines/scumm/gfx.cpp | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index 6e00776c..c54d709a 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -875,7 +875,13 @@ void ScummEngine::compositeHiResText(const void *src, int srcPitch, int x, int y
+ 						const byte t = *tp++;
+ 						const byte a = *ap++;
+ 
+-						if (t == CHARSET_MASK_TRANSPARENCY) {
++						// A pixel counts as text when the surface carries
++						// something other than the colour key. Index zero
++						// with no coverage is neither: that is a spot the
++						// text surface was cleared to instead of the key,
++						// and painting palette entry 0 there would darken
++						// the background.
++						if (t == CHARSET_MASK_TRANSPARENCY || (t == 0 && a == 0)) {
+ 							*d++ = bg;
+ 						} else if (a == 0 || a == 0xFF) {
+ 							// Characters drawn through the regular bitmap
+@@ -905,6 +911,8 @@ void ScummEngine::compositeHiResText(const void *src, int srcPitch, int x, int y
+ 			dst32Row += dstPitch * m;
+ 		}
+ 
++
++
+ 		return;
+ 	}
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,48 @@
+From 2d4bfd764c732fb33040697b7162b4c6ea7ced19 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 00:58:55 +0000
+Subject: [PATCH 13/18] SCUMM: Pack the built-in cursor per byte in Korean
+ alpha-text mode
+
+setBuiltinCursor() strides the cursor buffer by the output format's
+bytes per pixel, which is four in alpha-text mode. updateCursor() hands
+that same buffer to the backend as CLUT8, so the image came out spread
+across four times its width, with the 0xFF fill between the columns
+showing up as a white block around the cursor.
+
+Pack one byte per pixel when the cursor is going out as CLUT8.
+---
+ engines/scumm/cursor.cpp | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/engines/scumm/cursor.cpp b/engines/scumm/cursor.cpp
+index deaabf64..2de7ef0b 100644
+--- a/engines/scumm/cursor.cpp
++++ b/engines/scumm/cursor.cpp
+@@ -1294,7 +1294,13 @@ void ScummEngine_v5::setBuiltinCursor(int idx) {
+ 
+ 	int sclW = (_renderMode == Common::kRenderHercA || _renderMode == Common::kRenderHercG || _enableEGADithering) ? 2 : _textSurfaceMultiplier;
+ 	int sclH = (_renderMode == Common::kRenderHercA || _renderMode == Common::kRenderHercG) ? 1 : (_enableEGADithering ? 2 : _textSurfaceMultiplier);
+-	int sclW2 = _outputPixelFormat.bytesPerPixel * sclW;
++	// The built-in cursor is always palette indices. In Korean alpha-text
++	// mode the output format is 32bpp, but updateCursor() hands the data to
++	// the backend as CLUT8, so it has to be packed one byte per pixel here
++	// too - otherwise the glyph is spread over four times the width and the
++	// gaps show up as the 0xFF fill above.
++	const int cursorBpp = _koreanAlphaText ? 1 : _outputPixelFormat.bytesPerPixel;
++	int sclW2 = cursorBpp * sclW;
+ 
+ 	_cursor.hotspotX = _cursorHotspots[2 * _currentCursor] * sclW;
+ 	_cursor.hotspotY = _cursorHotspots[2 * _currentCursor + 1] * sclH;
+@@ -1306,7 +1312,7 @@ void ScummEngine_v5::setBuiltinCursor(int idx) {
+ 			if (src[i] & (1 << j)) {
+ 				byte *dst1 = _grabbedCursor + 16 * sclW2 * i * sclH + (15 - j) * sclW2;
+ 				byte *dst2 = (sclH == 2) ? dst1 + 16 * sclW2 : dst1;
+-				if (_outputPixelFormat.bytesPerPixel == 2) {
++				if (cursorBpp == 2) {
+ 					for (int b = 0; b < sclW; b++) {
+ 						*((uint16 *)dst1) = *((uint16 *)dst2) = color;
+ 						dst1 += 2;
+-- 
+2.43.0
+

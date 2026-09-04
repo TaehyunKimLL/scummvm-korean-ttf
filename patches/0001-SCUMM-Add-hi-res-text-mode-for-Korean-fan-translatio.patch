@@ -1,0 +1,298 @@
+From 112a4b8497a57db1532a8aec607810283f5fb0b0 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Thu, 3 Sep 2026 13:01:32 +0000
+Subject: [PATCH 01/18] SCUMM: Add hi-res text mode for Korean fan translations
+
+Mirrors the FM-Towns/PC98 Japanese approach: keep the game graphics at
+their original 320x200 resolution and scale them up on output, while
+rendering the text overlay into a 2x/3x framebuffer so that glyphs can
+carry more detail.
+
+- New korean_hires_scale option (1-3), validated in loadKorFont()
+- compositeHiResText(): DOS/VGA background upscaler + text compositor,
+  the counterpart to TownsScreen / mac_drawStripToScreen()
+- drawBits1Kor()/drawBitsN(): replicate glyph pixels into m x m blocks
+  and scale the shadow/stroke offsets accordingly
+- Generalise the hardcoded 'multiplier == 2' checks to 'multiplier > 1'
+---
+ engines/scumm/charset.cpp | 85 ++++++++++++++++++++++++++++++---------
+ engines/scumm/gfx.cpp     | 62 +++++++++++++++++++++++++++-
+ engines/scumm/scumm.cpp   |  6 +++
+ engines/scumm/scumm.h     |  5 +++
+ 4 files changed, 139 insertions(+), 19 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 190e1818..935e1a85 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -242,6 +242,26 @@ void ScummEngine::loadKorFont() {
+ 			error("Couldn't load any font: %s", fp.getName());
+ 		}
+ 	}
++
++	// Hi-res text mode for the Korean fan translations. This works like the
++	// FM-Towns/PC98 Japanese modes: the game graphics stay at their original
++	// low resolution and get scaled up on output, while the text overlay is
++	// kept at the higher resolution, so that the glyphs can be rendered with
++	// much more detail than the 320x200 framebuffer would ever allow.
++	if (_koreanHiResScale > 1) {
++		if (_game.platform == Common::kPlatformFMTowns || _game.platform == Common::kPlatformPCEngine ||
++			_game.platform == Common::kPlatformSegaCD || _game.platform == Common::kPlatformNES ||
++			_game.platform == Common::kPlatformMacintosh || _game.platform == Common::kPlatformC64 ||
++			_game.platform == Common::kPlatformApple2GS) {
++			// These platforms already own the text surface / do their own scaling.
++			debug(1, "Korean hi-res mode not available on this platform, disabling");
++			_koreanHiResScale = 1;
++		} else {
++			_textSurfaceMultiplier = _koreanHiResScale;
++			debug(1, "Korean hi-res text mode enabled (scale %d)", _koreanHiResScale);
++		}
++	}
++
+ 	return;
+ }
+ 
+@@ -845,21 +865,35 @@ void CharsetRendererPC::drawBits1Kor(Graphics::Surface &dest, int x1, int y1, co
+ 	const byte *origSrc = src;
+ 	byte *origDst = dst;
+ 
++	// In Korean hi-res mode the destination surface is scaled up, so every
++	// glyph pixel becomes an m x m block and the shadow/stroke offsets have
++	// to be scaled along with it. m == 1 leaves the original behaviour.
++	// NB: callers pass a by-value copy of _textSurface, so identify it by the
++	// pixel buffer rather than by object address.
++	const int m = (dest.getPixels() == _vm->_textSurface.getPixels()) ? _vm->_textSurfaceMultiplier : 1;
++
+ 	for (; i < 14; i++) {
+ 		src = origSrc;
+ 		dst = origDst;
+ 
+-		for (y = 0; y < height && y + drawTop + offsetY[i] < dest.h; y++) {
+-			for (x = 0; x < width && x + x1 + offsetX[i] < dest.w; x++) {
++		const int offX = offsetX[i] * m;
++		const int offY = offsetY[i] * m;
++
++		for (y = 0; y < height && (y * m) + drawTop + offY < dest.h; y++) {
++			for (x = 0; x < width && (x * m) + x1 + offX < dest.w; x++) {
+ 				if ((x % 8) == 0)
+ 					bits = *src++;
+-				if ((bits & revBitMask(x % 8)) && y + drawTop + offsetY[i] >= 0 && x + x1 + offsetX[i] >= 0) {
+-					*(dst + (dest.pitch * offsetY[i]) + offsetX[i]) = cTable[i];
++				if ((bits & revBitMask(x % 8)) && (y * m) + drawTop + offY >= 0 && (x * m) + x1 + offX >= 0) {
++					byte *p = dst + (dest.pitch * offY) + offX;
++					for (int sy = 0; sy < m; ++sy) {
++						for (int sx = 0; sx < m; ++sx)
++							p[sy * dest.pitch + sx] = cTable[i];
++					}
+ 				}
+-				dst++;
++				dst += m;
+ 			}
+ 
+-			dst += dest.pitch - width;
++			dst += dest.pitch * m - width * m;
+ 		}
+ 	}
+ }
+@@ -1295,10 +1329,19 @@ void CharsetRendererClassic::printCharIntern(bool is2byte, const byte *charPtr,
+ 			drawTop = _top - _vm->_screenTop;
+ 		}
+ 
+-		if (is2byte && _vm->_game.platform != Common::kPlatformFMTowns)
+-			drawBits1(dstSurface, (ignoreCharsetMask || !vs->hasTwoBuffers) ? _left + vs->xstart : _left, drawTop, charPtr, drawTop, origWidth, origHeight);
+-		else
++		if (is2byte && _vm->_game.platform != Common::kPlatformFMTowns) {
++			int dx = (ignoreCharsetMask || !vs->hasTwoBuffers) ? _left + vs->xstart : _left;
++			int dy = drawTop;
++			// When rendering into the (scaled) text surface, the glyph
++			// position has to be scaled as well.
++			if (dstSurface.getPixels() == _vm->_textSurface.getPixels() && _vm->isKoreanHiRes()) {
++				dx *= _vm->_textSurfaceMultiplier;
++				dy *= _vm->_textSurfaceMultiplier;
++			}
++			drawBits1(dstSurface, dx, dy, charPtr, dy, origWidth, origHeight);
++		} else {
+ 			drawBitsN(dstSurface, dstPtr, charPtr, *_fontPtr, drawTop, origWidth, origHeight);
++		}
+ 
+ 		if (_blitAlso && vs->hasTwoBuffers) {
+ 			// FIXME: Revisiting this code, I think the _blitAlso mode is likely broken
+@@ -1402,7 +1445,12 @@ void CharsetRendererClassic::drawBitsN(const Graphics::Surface &s, byte *dst, co
+ 	int color;
+ 	byte numbits, bits;
+ 
+-	int pitch = s.pitch - width;
++	// In Korean hi-res mode the text surface is scaled up; replicate every
++	// glyph pixel into an m x m block so that Latin text stays the same
++	// apparent size as before. NB: callers pass a by-value copy of
++	// _textSurface, so identify it by the pixel buffer, not by address.
++	const int m = (s.getPixels() == _vm->_textSurface.getPixels()) ? _vm->_textSurfaceMultiplier : 1;
++	int pitch = s.pitch - width * m;
+ 
+ 	assert(bpp == 1 || bpp == 2 || bpp == 4 || bpp == 8);
+ 	bits = *src++;
+@@ -1420,17 +1468,18 @@ void CharsetRendererClassic::drawBitsN(const Graphics::Surface &s, byte *dst, co
+ 			amigaMap = _vm->_roomPalette;
+ 	}
+ 
+-	for (y = 0; y < height && y + drawTop < s.h; y++) {
++	for (y = 0; y < height && (y * m) + drawTop < s.h; y++) {
+ 		for (x = 0; x < width; x++) {
+ 			color = (bits >> (8 - bpp)) & 0xFF;
+ 
+-			if (color && y + drawTop >= 0) {
+-				if (amigaMap)
+-					*dst = amigaMap[cmap[color]];
+-				else
+-					*dst = cmap[color];
++			if (color && (y * m) + drawTop >= 0) {
++				const byte c = amigaMap ? amigaMap[cmap[color]] : cmap[color];
++				for (int sy = 0; sy < m; ++sy) {
++					for (int sx = 0; sx < m; ++sx)
++						dst[sy * s.pitch + sx] = c;
++				}
+ 			}
+-			dst++;
++			dst += m;
+ 			bits <<= bpp;
+ 			numbits -= bpp;
+ 			if (numbits == 0) {
+@@ -1438,7 +1487,7 @@ void CharsetRendererClassic::drawBitsN(const Graphics::Surface &s, byte *dst, co
+ 				numbits = 8;
+ 			}
+ 		}
+-		dst += pitch;
++		dst += pitch + s.pitch * (m - 1);
+ 	}
+ }
+ 
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index bf85f13c..28984561 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -704,6 +704,13 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
+ 			return;
+ 		} else
+ #endif
++		// Korean hi-res text mode: the game graphics are still at their
++		// original resolution, so scale them up by nearest neighbour while
++		// compositing the (already hi-res) text surface on top. FM-Towns and
++		// Macintosh have dedicated code paths for this and never get here.
++		if (isKoreanHiRes()) {
++			compositeHiResText(src, vs->pitch, x, y, width, height);
++		} else
+ 		// Compose the text over the game graphics
+ 		if (_outputPixelFormat.bytesPerPixel == 2) {
+ 			const byte *srcPtr = (const byte *)src;
+@@ -794,7 +801,8 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
+ 					_system->copyRectToScreen(blackbuf, 16, 0, 0, 16, 240); // Fix left strip
+ 				}
+ 			}
+-		} else if (_useCJKMode && m == 2) {
++		} else if (_useCJKMode && m > 1) {
++			// The composite buffer holds the already upscaled image
+ 			pitch *= m;
+ 			x *= m;
+ 			y *= m;
+@@ -820,6 +828,58 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
+ 	}
+ }
+ 
++/**
++ * Composite the hi-res text surface over an upscaled copy of the game
++ * graphics, writing the result into _compositeBuf.
++ *
++ * The game graphics live at the original (low) resolution while the text
++ * surface is _textSurfaceMultiplier times larger in each direction. Each
++ * source pixel is replicated m x m times; wherever the text surface holds
++ * something other than CHARSET_MASK_TRANSPARENCY, the text pixel wins.
++ * This is the DOS/VGA counterpart to what TownsScreen and _macScreen do
++ * for the FM-Towns and Macintosh versions.
++ */
++void ScummEngine::compositeHiResText(const void *src, int srcPitch, int x, int y, int width, int height) {
++	const int m = _textSurfaceMultiplier;
++	const int dstPitch = width * m;
++
++	const byte *srcRow = (const byte *)src;
++	const byte *textRow = (const byte *)_textSurface.getBasePtr(x * m, y * m);
++	byte *dstRow = _compositeBuf;
++
++	for (int h = 0; h < height; ++h) {
++		// Build the first of the m identical output rows for this source row.
++		const byte *textPtr = textRow;
++		byte *dst = dstRow;
++
++		for (int w = 0; w < width; ++w) {
++			const byte color = srcRow[w];
++			for (int sx = 0; sx < m; ++sx) {
++				const byte t = *textPtr++;
++				*dst++ = (t == CHARSET_MASK_TRANSPARENCY) ? color : t;
++			}
++		}
++
++		// The remaining m-1 rows repeat the same background pixels but must
++		// still pick up their own text scanline.
++		for (int sy = 1; sy < m; ++sy) {
++			const byte *tp = textRow + sy * _textSurface.pitch;
++			byte *d = dstRow + sy * dstPitch;
++			for (int w = 0; w < width; ++w) {
++				const byte color = srcRow[w];
++				for (int sx = 0; sx < m; ++sx) {
++					const byte t = *tp++;
++					*d++ = (t == CHARSET_MASK_TRANSPARENCY) ? color : t;
++				}
++			}
++		}
++
++		srcRow += srcPitch;
++		textRow += _textSurface.pitch * m;
++		dstRow += dstPitch * m;
++	}
++}
++
+ const byte *ScummEngine::postProcessDOSGraphics(VirtScreen *vs, int &pitch, int &x, int &y, int &width, int &height) const {
+ 	static const byte v2VrbColMap[] =	{ 0x0, 0x5, 0x5, 0x5, 0xA, 0xA, 0xA, 0xF, 0xF, 0x5, 0x5, 0x5, 0xA, 0xA, 0xF, 0xF };
+ 	static const byte v2TxtColMap[] =	{ 0x0, 0xF, 0xA, 0x5, 0xA, 0x5, 0x5, 0xF, 0xA, 0xA, 0xA, 0xA, 0xA, 0x5, 0x5, 0xF };
+diff --git a/engines/scumm/scumm.cpp b/engines/scumm/scumm.cpp
+index cb0f5bc1..3f4372cc 100644
+--- a/engines/scumm/scumm.cpp
++++ b/engines/scumm/scumm.cpp
+@@ -436,6 +436,12 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
+ 	}
+ #endif
+ 
++	// Korean hi-res text mode. Only meaningful for the Korean fan translations,
++	// loadKorFont() does the final validation and may switch it back off.
++	ConfMan.registerDefault("korean_hires_scale", 1);
++	if (ConfMan.hasKey("korean_hires_scale"))
++		_koreanHiResScale = CLIP<int>(ConfMan.getInt("korean_hires_scale"), 1, 3);
++
+ 	_bytesPerPixel = (_game.features & GF_16BIT_COLOR) ? 2 : 1;
+ 	uint8 sizeMult = _bytesPerPixel;
+ 
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index 9864f7e9..2cca7485 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1523,6 +1523,7 @@ protected:
+ 
+ 	const byte *postProcessDOSGraphics(VirtScreen *vs, int &pitch, int &x, int &y, int &width, int &height) const;
+ 	const byte *ditherVGAtoEGA(int &pitch, int &x, int &y, int &width, int &height) const;
++	void compositeHiResText(const void *src, int srcPitch, int x, int y, int width, int height);
+ 
+ public:
+ 	VirtScreen *findVirtScreen(int y);
+@@ -1769,6 +1770,10 @@ public:
+ 	int _2byteShadow = 0;
+ 	bool _force2ByteCharHeight = false;
+ 
++	// Korean hi-res text mode: scale factor for the text surface (1 = off).
++	int _koreanHiResScale = 1;
++	bool isKoreanHiRes() const { return _koreanHiResScale > 1; }
++
+ 	int _2byteHeight = 0;
+ 	int _2byteWidth = 0;
+ 	int _krStrPost = 0;
+-- 
+2.43.0
+

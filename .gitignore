@@ -1,0 +1,25 @@
+# 빌드 산출물
+*.exe
+*.zip
+*.tar.gz
+*.tar.xz
+dist/
+stage/
+
+# 폰트는 각자 라이선스가 있어 저장소에 담지 않는다
+*.ttf
+*.otf
+
+# 게임 데이터
+*.trs
+*.fnt
+*.lfl
+*.la0
+*.000
+*.001
+
+# 잡동사니
+*.log
+*.pgm
+*.png
+.DS_Store

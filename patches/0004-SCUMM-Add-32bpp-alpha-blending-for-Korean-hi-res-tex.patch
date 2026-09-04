@@ -1,0 +1,542 @@
+From a081e0c29faf1d8b0da6ba554c05f4a831e1b60f Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Thu, 3 Sep 2026 21:28:06 +0000
+Subject: [PATCH 04/18] SCUMM: Add 32bpp alpha blending for Korean hi-res text
+
+The Korean hi-res text mode so far rendered its TrueType glyphs through
+a monochrome rasteriser, because the text surface is CLUT8 and uses a
+colour key for transparency. That leaves the glyph edges aliased, which
+is most visible at the 24px and 36px sizes used for dialogue and credits.
+
+Render the glyphs with anti-aliasing instead and keep the coverage in a
+companion 8bpp channel next to the CLUT8 text surface. The game graphics
+stay paletted; only the final composite is done in 32bpp, where the text
+colour is looked up in a locally cached palette and blended against the
+upscaled background.
+
+This needs a true colour output surface, which not every backend can
+provide - the SDL surface backend filters out 4 byte formats. When no
+32bpp mode is available the engine warns and falls back to the existing
+CLUT8 path.
+
+Enabled with the korean_alpha_text config option.
+---
+ engines/scumm/charset.cpp | 189 ++++++++++++++++++++++++++++++++++++--
+ engines/scumm/gfx.cpp     |  68 ++++++++++++++
+ engines/scumm/palette.cpp |  16 ++++
+ engines/scumm/scumm.cpp   |  63 ++++++++++++-
+ engines/scumm/scumm.h     |   6 ++
+ 5 files changed, 333 insertions(+), 9 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 38fef8f4..730222ac 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -380,6 +380,33 @@ void ScummEngine::loadKorTtfMap(const Common::Path &mapPath) {
+ 	if (map.getKey("title", "fonts", value))
+ 		_korTtfTitlePath = Common::Path(value);
+ 
++	// Optional [sizes] section: pin a role to an exact pixel size instead of
++	// letting the auto-fit pick one. Pixel fonts only render cleanly at
++	// integer multiples of their design grid (16px for Neo Dunggeunmo, for
++	// instance), and the scaled line boxes rarely land on such a multiple.
++	//
++	//   [sizes]
++	//   title=32          ; render at exactly 32px
++	//   bold=16x2         ; render at 32px, then downscale by 2 to fit 16px
++	//
++	// The "NxM" form supersamples: the glyph is rasterised M times larger and
++	// box-filtered back down, which keeps a pixel font on its native grid
++	// while still fitting a line box that is not a multiple of it.
++	static const char *const roleNames[] = { "default", "bold", "title" };
++	for (int r = 0; r < ARRAYSIZE(roleNames); ++r) {
++		if (!map.getKey(roleNames[r], "sizes", value))
++			continue;
++
++		const char *sep = strchr(value.c_str(), 'x');
++		const int size = atoi(value.c_str());
++		const int super = sep ? atoi(sep + 1) : 1;
++
++		if (size > 0)
++			_korTtfRoleSizes[r] = size;
++		if (super > 1)
++			_korTtfRoleSupersample[r] = super;
++	}
++
+ 	const Common::INIFile::SectionKeyList keys = map.getKeys("map");
+ 	for (Common::INIFile::SectionKeyList::const_iterator it = keys.begin(); it != keys.end(); ++it) {
+ 		if (it->key.hasPrefix("height_")) {
+@@ -427,8 +454,10 @@ void ScummEngine::selectKorTtfFont(int lineBox) {
+ 	if (_korTtfFonts.contains(cacheKey)) {
+ 		_korTtfCurLineBox = cacheKey;
+ 		_korTtfFont = _korTtfFonts[cacheKey];
++		_korTtfSupersample = _korTtfRoleSupersample.contains(role)
++			? CLIP<int>(_korTtfRoleSupersample[role], 1, 8) : 1;
+ 		if (_korTtfFont)
+-			_korTtfYOffset = (lineBox - _korTtfFont->getFontHeight()) / 2;
++			_korTtfYOffset = (lineBox - _korTtfFont->getFontHeight() / _korTtfSupersample) / 2;
+ 		return;
+ 	}
+ 
+@@ -439,8 +468,29 @@ void ScummEngine::selectKorTtfFont(int lineBox) {
+ 	// draws its inventory straight from script with a hardcoded pitch).
+ 	// Leave a little headroom so descenders never bleed into the next line.
+ 	int size = lineBox - _koreanHiResScale;
+-	if (ConfMan.hasKey("korean_ttf_size"))
++	bool pinned = false;
++
++	// A per-role size from the font map wins over the auto-fit, and the
++	// global korean_ttf_size overrides everything.
++	if (_korTtfRoleSizes.contains(role)) {
++		size = _korTtfRoleSizes[role];
++		pinned = true;
++	}
++	if (ConfMan.hasKey("korean_ttf_size")) {
+ 		size = CLIP<int>(ConfMan.getInt("korean_ttf_size"), 6, 128);
++		pinned = true;
++	}
++
++	// Supersampling: rasterise the glyphs N times larger than the size we
++	// actually want, then let drawKorTtfChar() box-filter them down. This
++	// keeps a pixel font on an integer multiple of its design grid even when
++	// the target line box is not one.
++	int supersample = 1;
++	if (_korTtfRoleSupersample.contains(role))
++		supersample = CLIP<int>(_korTtfRoleSupersample[role], 1, 8);
++
++	if (supersample > 1)
++		size *= supersample;
+ 
+ 	Graphics::Font *result = nullptr;
+ 
+@@ -457,33 +507,36 @@ void ScummEngine::selectKorTtfFont(int lineBox) {
+ 			break;
+ 
+ 		Graphics::Font *font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, size,
+-						Graphics::kTTFSizeModeCell, 0, 0, Graphics::kTTFRenderModeMonochrome);
++						Graphics::kTTFSizeModeCell, 0, 0,
++						_koreanAlphaText ? Graphics::kTTFRenderModeLight
++										 : Graphics::kTTFRenderModeMonochrome);
+ 		if (!font)
+ 			break;
+ 
+-		if (font->getFontHeight() <= lineBox - _koreanHiResScale || ConfMan.hasKey("korean_ttf_size")) {
++		if (font->getFontHeight() / supersample <= lineBox - _koreanHiResScale || pinned) {
+ 			result = font;
+ 			break;
+ 		}
+ 
+ 		delete font;
+-		--size;
++		size -= supersample;
+ 	}
+ 
+ 	// Cache negative results too, so a failing size is not retried endlessly.
+ 	_korTtfFonts[cacheKey] = result;
+ 	_korTtfFont = result;
+ 	_korTtfCurLineBox = cacheKey;
++	_korTtfSupersample = supersample;
+ 
+ 	if (!result) {
+ 		warning("SCUMM::Font: Could not fit Korean TTF font into a %d pixel line box", lineBox);
+ 		return;
+ 	}
+ 
+-	_korTtfYOffset = (lineBox - result->getFontHeight()) / 2;
++	_korTtfYOffset = (lineBox - result->getFontHeight() / supersample) / 2;
+ 
+-	debug(1, "Korean TTF font: role %d size %d (height %d, lineBox %d, yOffset %d)",
+-		  role, size, result->getFontHeight(), lineBox, _korTtfYOffset);
++	debug(1, "Korean TTF font: role %d size %d ss %d (height %d, lineBox %d, yOffset %d)",
++		  role, size, supersample, result->getFontHeight(), lineBox, _korTtfYOffset);
+ #endif
+ }
+ 
+@@ -522,6 +575,126 @@ bool ScummEngine::drawKorTtfChar(Graphics::Surface &dest, uint16 chr, int x, int
+ 
+ 	const int ty = y + _korTtfYOffset;
+ 
++	// Alpha path: rasterise the glyph once with anti-aliasing, then store the
++	// colour in the text surface and the coverage in the companion channel.
++	// compositeHiResText() blends the two against the upscaled background.
++	if (_koreanAlphaText && _korAlphaSurface.getPixels()) {
++		const int gw = _korTtfFont->getCharWidth(unicode);
++		const int gh = _korTtfFont->getFontHeight();
++		if (gw <= 0 || gh <= 0)
++			return false;
++
++		// Rasterise into a 32bpp scratch surface: drawAlphaChar() writes the
++		// glyph colour with the coverage in the alpha channel, and for a
++		// CLUT8 destination it would have nothing meaningful to write. We
++		// draw opaque white and recover the coverage from the alpha byte.
++		const Graphics::PixelFormat covFmt(4, 8, 8, 8, 8, 24, 16, 8, 0);
++		Graphics::Surface cov;
++		cov.create(gw, gh, covFmt);
++		cov.fillRect(Common::Rect(0, 0, gw, gh), 0);
++		_korTtfFont->drawAlphaChar(&cov, unicode, 0, 0, covFmt.ARGBToColor(0xFF, 0xFF, 0xFF, 0xFF));
++
++		const int adv = _2byteWidth * _koreanHiResScale;
++		int tx = x;
++		if (gw < adv)
++			tx += (adv - gw) / 2;
++
++		const int shadowOff = _koreanHiResScale;
++
++		for (int gy = 0; gy < gh; ++gy) {
++			const uint32 *covRow = (const uint32 *)cov.getBasePtr(0, gy);
++
++			for (int gx = 0; gx < gw; ++gx) {
++				uint8 ca, cr, cg, cb;
++				covFmt.colorToARGB(covRow[gx], ca, cr, cg, cb);
++				const byte a = ca;
++				if (!a)
++					continue;
++
++				// Drop shadow first, at reduced coverage.
++				if (shadowColor != color) {
++					const int sxp = tx + gx + shadowOff;
++					const int syp = ty + gy + shadowOff;
++					if (sxp >= 0 && syp >= 0 && sxp < dest.w && syp < dest.h) {
++						byte *aDst = (byte *)_korAlphaSurface.getBasePtr(sxp, syp);
++						if (*aDst < a) {
++							*(byte *)dest.getBasePtr(sxp, syp) = shadowColor;
++							*aDst = a;
++						}
++					}
++				}
++
++				const int px = tx + gx;
++				const int py = ty + gy;
++				if (px < 0 || py < 0 || px >= dest.w || py >= dest.h)
++					continue;
++
++				*(byte *)dest.getBasePtr(px, py) = color;
++				*(byte *)_korAlphaSurface.getBasePtr(px, py) = a;
++			}
++		}
++
++		cov.free();
++		return true;
++	}
++
++	// Supersampled path: render the glyph into a scratch surface at N times
++	// the target size, then box-filter it down. A source block counts as set
++	// when at least half of its pixels are, which keeps pixel-font strokes
++	// crisp instead of smearing them.
++	if (_korTtfSupersample > 1) {
++		const int ss = _korTtfSupersample;
++		const int bigW = _korTtfFont->getCharWidth(unicode);
++		const int bigH = _korTtfFont->getFontHeight();
++		if (bigW <= 0 || bigH <= 0)
++			return false;
++
++		Graphics::Surface tmp;
++		tmp.create(bigW, bigH, Graphics::PixelFormat::createFormatCLUT8());
++		tmp.fillRect(Common::Rect(0, 0, bigW, bigH), 0);
++		_korTtfFont->drawChar(&tmp, unicode, 0, 0, 1);
++
++		const int outW = bigW / ss;
++		const int outH = bigH / ss;
++		const int adv = _2byteWidth * _koreanHiResScale;
++		int tx = x;
++		if (outW > 0 && outW < adv)
++			tx += (adv - outW) / 2;
++
++		const int threshold = (ss * ss + 1) / 2;
++
++		// Two passes so the drop shadow never paints over glyph pixels that
++		// a later block would have set.
++		for (int pass = 0; pass < 2; ++pass) {
++			if (pass == 0 && shadowColor == color)
++				continue;
++
++			for (int oy = 0; oy < outH; ++oy) {
++				for (int ox = 0; ox < outW; ++ox) {
++					int hits = 0;
++					for (int sy = 0; sy < ss; ++sy) {
++						const byte *row = (const byte *)tmp.getBasePtr(ox * ss, oy * ss + sy);
++						for (int sx = 0; sx < ss; ++sx)
++							hits += row[sx] ? 1 : 0;
++					}
++
++					if (hits < threshold)
++						continue;
++
++					const int px = tx + ox + (pass == 0 ? _koreanHiResScale : 0);
++					const int py = ty + oy + (pass == 0 ? _koreanHiResScale : 0);
++					if (px < 0 || py < 0 || px >= dest.w || py >= dest.h)
++						continue;
++
++					*(byte *)dest.getBasePtr(px, py) = (pass == 0) ? shadowColor : color;
++				}
++			}
++		}
++
++		tmp.free();
++		return true;
++	}
++
+ 	// The glyph is rendered at the requested cell size; center it
+ 	// horizontally in the (scaled) advance box so text doesn't drift.
+ 	const int adv = _2byteWidth * _koreanHiResScale;
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index 580f8879..f4d5c87c 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -808,6 +808,11 @@ void ScummEngine::drawStripToScreen(VirtScreen *vs, int x, int width, int top, i
+ 			y *= m;
+ 			width *= m;
+ 			height *= m;
++
++			// In Korean alpha-text mode the composite buffer is 32bpp, so its
++			// pitch is derived from the output width rather than the source's.
++			if (_koreanAlphaText)
++				pitch = width * _outputPixelFormat.bytesPerPixel;
+ 		} else if (_enableEGADithering) {
+ 			// EGA mode for certain VGA versions (MI2, LOOM Talkie)
+ 			src = ditherVGAtoEGA(pitch, x, y, width, height);
+@@ -845,6 +850,56 @@ void ScummEngine::compositeHiResText(const void *src, int srcPitch, int x, int y
+ 
+ 	const byte *srcRow = (const byte *)src;
+ 	const byte *textRow = (const byte *)_textSurface.getBasePtr(x * m, y * m);
++
++	// 32bpp path: the text surface carries an alpha channel, so glyph edges
++	// can be blended into the (upscaled) background instead of being keyed
++	// out. The game graphics stay paletted; the lookup happens here.
++	if (_koreanAlphaText) {
++		const byte *alphaRow = (const byte *)_korAlphaSurface.getBasePtr(x * m, y * m);
++		uint32 *dst32Row = (uint32 *)_compositeBuf;
++
++		for (int h = 0; h < height; ++h) {
++			for (int sy = 0; sy < m; ++sy) {
++				const byte *tp = textRow + sy * _textSurface.pitch;
++				const byte *ap = alphaRow + sy * _korAlphaSurface.pitch;
++				uint32 *d = dst32Row + sy * dstPitch;
++
++				for (int w = 0; w < width; ++w) {
++					const uint32 bg = _korAlphaPalette[srcRow[w]];
++
++					for (int sx = 0; sx < m; ++sx) {
++						const byte t = *tp++;
++						const byte a = *ap++;
++
++						if (t == CHARSET_MASK_TRANSPARENCY || a == 0) {
++							*d++ = bg;
++						} else if (a == 0xFF) {
++							*d++ = _korAlphaPalette[t];
++						} else {
++							// Blend the glyph colour over the background.
++							const uint32 fg = _korAlphaPalette[t];
++							uint8 fr, fg2, fb, br, bg2, bb;
++							_outputPixelFormat.colorToRGB(fg, fr, fg2, fb);
++							_outputPixelFormat.colorToRGB(bg, br, bg2, bb);
++
++							*d++ = _outputPixelFormat.RGBToColor(
++									(fr * a + br * (255 - a)) / 255,
++									(fg2 * a + bg2 * (255 - a)) / 255,
++									(fb * a + bb * (255 - a)) / 255);
++						}
++					}
++				}
++			}
++
++			srcRow += srcPitch;
++			textRow += _textSurface.pitch * m;
++			alphaRow += _korAlphaSurface.pitch * m;
++			dst32Row += dstPitch * m;
++		}
++
++		return;
++	}
++
+ 	byte *dstRow = _compositeBuf;
+ 
+ 	for (int h = 0; h < height; ++h) {
+@@ -1321,6 +1376,11 @@ void ScummEngine::restoreBackground(Common::Rect rect, byte backColor) {
+ 							(vs->topline + rect.top - _screenTop) * _textSurfaceMultiplier)
+ 					: (byte *)_textSurface.getBasePtr(rect.left, rect.top - _screenTop);
+ 				fill(mask, _textSurface.pitch, CHARSET_MASK_TRANSPARENCY, width * _textSurfaceMultiplier, height * _textSurfaceMultiplier, _textSurface.format.bytesPerPixel);
++				if (_korAlphaSurface.getPixels()) {
++					byte *aMask = (byte *)_korAlphaSurface.getBasePtr(rect.left * _textSurfaceMultiplier,
++							(vs->topline + rect.top - _screenTop) * _textSurfaceMultiplier);
++					fill(aMask, _korAlphaSurface.pitch, 0, width * _textSurfaceMultiplier, height * _textSurfaceMultiplier, 1);
++				}
+ 			}
+ 		}
+ 	} else {
+@@ -1345,6 +1405,11 @@ void ScummEngine::restoreBackground(Common::Rect rect, byte backColor) {
+ 			byte *mask = (byte *)_textSurface.getBasePtr(rect.left * _textSurfaceMultiplier,
+ 					(vs->topline + rect.top - _screenTop) * _textSurfaceMultiplier);
+ 			fill(mask, _textSurface.pitch, CHARSET_MASK_TRANSPARENCY, width * _textSurfaceMultiplier, height * _textSurfaceMultiplier, _textSurface.format.bytesPerPixel);
++			if (_korAlphaSurface.getPixels()) {
++				byte *aMask = (byte *)_korAlphaSurface.getBasePtr(rect.left * _textSurfaceMultiplier,
++						(vs->topline + rect.top - _screenTop) * _textSurfaceMultiplier);
++				fill(aMask, _korAlphaSurface.pitch, 0, width * _textSurfaceMultiplier, height * _textSurfaceMultiplier, 1);
++			}
+ 		}
+ 
+ 		if (_game.features & GF_16BIT_COLOR)
+@@ -1415,6 +1480,9 @@ void ScummEngine::clearTextSurface() {
+ 		_game.platform == Common::kPlatformFMTowns ? 0 :
+ #endif
+ 		CHARSET_MASK_TRANSPARENCY,  _textSurface.w, _textSurface.h, _textSurface.format.bytesPerPixel);
++
++	if (_korAlphaSurface.getPixels())
++		_korAlphaSurface.fillRect(Common::Rect(0, 0, _korAlphaSurface.w, _korAlphaSurface.h), 0);
+ }
+ 
+ byte *ScummEngine::getMaskBuffer(int x, int y, int z) {
+diff --git a/engines/scumm/palette.cpp b/engines/scumm/palette.cpp
+index a3758d7f..2b6154f4 100644
+--- a/engines/scumm/palette.cpp
++++ b/engines/scumm/palette.cpp
+@@ -1769,6 +1769,22 @@ void ScummEngine::updatePalette() {
+ 			paletteColors[i] = levels[(paletteColors[i] >> 5) & 0x07];
+ 	}
+ 
++	// In Korean alpha-text mode the output surface is 32bpp, so the backend
++	// has no palette to set: we do the palette lookup ourselves when the
++	// composite buffer is built. Keep a local copy instead.
++	if (_koreanAlphaText) {
++		for (int i = 0; i < num; ++i) {
++			_korAlphaPalette[first + i] = _outputPixelFormat.RGBToColor(
++					paletteColors[i * 3 + 0],
++					paletteColors[i * 3 + 1],
++					paletteColors[i * 3 + 2]);
++		}
++
++		if (_macGui)
++			_macGui->setPaletteDirty();
++		return;
++	}
++
+ 	_system->getPaletteManager()->setPalette(paletteColors, first, num);
+ 
+ 	if (_macGui)
+diff --git a/engines/scumm/scumm.cpp b/engines/scumm/scumm.cpp
+index f0f09e0c..a5724ec9 100644
+--- a/engines/scumm/scumm.cpp
++++ b/engines/scumm/scumm.cpp
+@@ -439,6 +439,7 @@ ScummEngine::ScummEngine(OSystem *syst, const DetectorResult &dr)
+ 	// Korean hi-res text mode. Only meaningful for the Korean fan translations,
+ 	// loadKorFont() does the final validation and may switch it back off.
+ 	ConfMan.registerDefault("korean_hires_scale", 1);
++	ConfMan.registerDefault("korean_alpha_text", false);
+ 	if (ConfMan.hasKey("korean_hires_scale"))
+ 		_koreanHiResScale = CLIP<int>(ConfMan.getInt("korean_hires_scale"), 1, 3);
+ 
+@@ -506,6 +507,7 @@ ScummEngine::~ScummEngine() {
+ 
+ 	if (_2byteFontPtr && !_useMultiFont)
+ 		delete[] _2byteFontPtr;
++	_korAlphaSurface.free();
+ 	// _korTtfFont only aliases an entry of _korTtfFonts, so free the cache.
+ 	_korTtfFont = nullptr;
+ 	for (Common::HashMap<int, Graphics::Font *>::iterator it = _korTtfFonts.begin(); it != _korTtfFonts.end(); ++it)
+@@ -1275,6 +1277,29 @@ Common::Error ScummEngine::init() {
+ 	if (_filenamePattern.genMethod == kGenDiskNumSteam || _filenamePattern.genMethod == kGenRoomNumSteam)
+ 		_game.platform = Common::kPlatformDOS;
+ 
++	// Korean alpha-text mode needs a true colour output surface, and the
++	// decision has to be made before loadCJKFont() builds the TTF instances:
++	// the glyph renderer differs (anti-aliased vs monochrome).
++	//
++	// Only the availability check happens here; initGraphics() further down
++	// does the actual mode set and may still turn this back off.
++	if (isKoreanHiRes() && ConfMan.getBool("korean_alpha_text")) {
++#ifdef USE_RGB_COLOR
++		Common::List<Graphics::PixelFormat> supported = _system->getSupportedFormats();
++		for (Common::List<Graphics::PixelFormat>::const_iterator g = supported.begin(); g != supported.end(); ++g) {
++			if (g->bytesPerPixel == 4) {
++				_koreanAlphaText = true;
++				break;
++			}
++		}
++
++		if (!_koreanAlphaText)
++			warning("SCUMM: no 32bpp output available, Korean alpha text disabled");
++#else
++		warning("SCUMM: build lacks RGB colour support, Korean alpha text disabled");
++#endif
++	}
++
+ 	// Load CJK font, if present
+ 	// Load it earlier so _useCJKMode variable could be set
+ 	loadCJKFont();
+@@ -1525,7 +1550,34 @@ Common::Error ScummEngine::init() {
+ 		if (_game.platform == Common::kPlatformFMTowns && _game.version == 5)
+ 			return Common::Error(Common::kUnsupportedColorMode, "This game requires dual graphics layer support which is disabled in this build");
+ #endif
+-			initGraphics(screenWidth, screenHeight);
++			// Korean hi-res mode can composite the text with alpha blending,
++			// which needs a true colour output surface. The game graphics stay
++			// paletted; only the final composite is done in 32bpp.
++			// _koreanAlphaText was already probed before loadCJKFont().
++			if (_koreanAlphaText) {
++#ifdef USE_RGB_COLOR
++				Common::List<Graphics::PixelFormat> supported = _system->getSupportedFormats();
++				Common::List<Graphics::PixelFormat> tryModes;
++				for (Common::List<Graphics::PixelFormat>::const_iterator g = supported.begin(); g != supported.end(); ++g) {
++					if (g->bytesPerPixel == 4)
++						tryModes.push_back(*g);
++				}
++				tryModes.push_back(Graphics::PixelFormat::createFormatCLUT8());
++
++				initGraphics(screenWidth, screenHeight, tryModes);
++
++				if (_system->getScreenFormat().bytesPerPixel != 4) {
++					warning("SCUMM: no 32bpp output available (got %s), Korean alpha text disabled",
++							_system->getScreenFormat().toString().c_str());
++					_koreanAlphaText = false;
++				} else {
++					debug(1, "SCUMM: Korean alpha text enabled, output format %s",
++						  _system->getScreenFormat().toString().c_str());
++				}
++#endif
++			} else {
++				initGraphics(screenWidth, screenHeight);
++			}
+ 
+ 			if (_game.platform == Common::kPlatformNES)
+ 				_system->fillScreen(0x1d);
+@@ -1723,6 +1775,15 @@ void ScummEngine::setupScumm(const Common::Path &macResourceFile) {
+ 
+ 	// Create and clear the text surface
+ 	_textSurface.create(_screenWidth * _textSurfaceMultiplier, _screenHeight * _textSurfaceMultiplier, Graphics::PixelFormat::createFormatCLUT8());
++
++	// Companion coverage channel for the text surface, used only when the
++	// Korean text is composited with alpha blending.
++	if (_koreanAlphaText) {
++		_korAlphaSurface.create(_screenWidth * _textSurfaceMultiplier,
++								_screenHeight * _textSurfaceMultiplier,
++								Graphics::PixelFormat::createFormatCLUT8());
++		_korAlphaSurface.fillRect(Common::Rect(0, 0, _korAlphaSurface.w, _korAlphaSurface.h), 0);
++	}
+ 	clearTextSurface();
+ 
+ 	// Create the costume renderer
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index b46659af..1f056cd5 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1782,11 +1782,17 @@ public:
+ 	Graphics::Font *_korTtfFont = nullptr;
+ 	int _korTtfYOffset = 0;
+ 	int _korTtfCurLineBox = -1;
++	int _korTtfSupersample = 1;
++	bool _koreanAlphaText = false;
++	uint32 _korAlphaPalette[256] = {};
++	Graphics::Surface _korAlphaSurface;
+ 	bool _korTtfEnabled = false;
+ 	Common::Path _korTtfPath;
+ 	Common::Path _korTtfBoldPath;
+ 	Common::Path _korTtfTitlePath;
+ 	Common::HashMap<int, int> _korTtfHeightRoles;
++	Common::HashMap<int, int> _korTtfRoleSizes;
++	Common::HashMap<int, int> _korTtfRoleSupersample;
+ 	void loadKorTtfFont();
+ 	void loadKorTtfMap(const Common::Path &mapPath);
+ 	void selectKorTtfFont(int lineBox);
+-- 
+2.43.0
+

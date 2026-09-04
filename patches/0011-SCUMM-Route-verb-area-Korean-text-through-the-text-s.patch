@@ -1,0 +1,40 @@
+From 07d7ce37f1375c76dc4d49790ac066e0a338af2d Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 00:41:12 +0000
+Subject: [PATCH 11/18] SCUMM: Route verb area Korean text through the text
+ surface
+
+Virtual screens without a back buffer - the verb area, for instance -
+receive their text directly, before the branch that offers the glyph to
+the TrueType renderer. The Korean hi-res path never got a chance there,
+so the verb and inventory labels stayed on the original bitmap font
+while the rest of the game had switched over.
+
+CharsetRendererV3 was already handled; this is the same fix for the v5
+renderer.
+---
+ engines/scumm/charset.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index b3ae71e2..6428747b 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -1788,7 +1788,13 @@ void CharsetRendererV3::printChar(int chr, bool ignoreCharsetMask) {
+ 		_textScreenID = vs->number;
+ 	}
+ 
+-	if ((ignoreCharsetMask || !vs->hasTwoBuffers)
++	// Korean hi-res text always goes to the scaled text surface, even for
++	// the virtual screens that normally receive text directly (the verb
++	// area): that is the only buffer with the resolution to hold it.
++	const bool korTtfTarget = _vm->isKoreanHiRes() && _vm->_korTtfFont
++			&& (is2byte || _vm->_korTtfLatin);
++
++	if ((ignoreCharsetMask || !vs->hasTwoBuffers) && !korTtfTarget
+ #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
+ 		&& (_vm->_game.platform != Common::kPlatformFMTowns)
+ #endif
+-- 
+2.43.0
+

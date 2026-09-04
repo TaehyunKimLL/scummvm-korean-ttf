@@ -1,0 +1,68 @@
+From 856aed985859c663d459a8821799ddc79421ddf7 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 00:50:40 +0000
+Subject: [PATCH 12/18] SCUMM: Give the cursor a palette in Korean alpha-text
+ mode
+
+The 32bpp path keeps the palette to itself and converts when it builds
+the composite buffer, so setPalette() is never called. The mouse cursor
+is still made of palette indices though, and the backend falls back to
+the game palette it was never given - drawing the cursor as a white
+block.
+
+Declare the cursor as CLUT8 rather than the screen format, and hand it
+the colours directly. The palette changes per scene, so refresh it from
+setPaletteFromPtr() as well.
+---
+ engines/scumm/cursor.cpp  | 11 +++++++++++
+ engines/scumm/palette.cpp |  5 +++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/engines/scumm/cursor.cpp b/engines/scumm/cursor.cpp
+index 21938706..deaabf64 100644
+--- a/engines/scumm/cursor.cpp
++++ b/engines/scumm/cursor.cpp
+@@ -429,6 +429,17 @@ void ScummEngine::updateCursor() {
+ 		mac_scaleCursor(cursor, hotspotX, hotspotY, width, height);
+ 
+ 	Graphics::PixelFormat format = _system->getScreenFormat();
++
++	// In Korean alpha-text mode the screen is 32bpp, but the cursor data is
++	// still palette indices - the engine only converts when it builds the
++	// composite buffer. Declaring it as the screen format would make the
++	// backend read the indices as true colour, and since setPalette() is
++	// skipped in this mode the cursor also needs its own copy.
++	if (_koreanAlphaText) {
++		format = Graphics::PixelFormat::createFormatCLUT8();
++		CursorMan.replaceCursorPalette(_currentPalette, 0, 256);
++	}
++
+ 	if (_game.heversion == 70) {
+ 		// Windows HE 70 games render the game scaled to 640x400, but
+ 		// leave the cursor unscaled.
+diff --git a/engines/scumm/palette.cpp b/engines/scumm/palette.cpp
+index 2b6154f4..5ff3ec69 100644
+--- a/engines/scumm/palette.cpp
++++ b/engines/scumm/palette.cpp
+@@ -29,6 +29,7 @@
+ #include "graphics/paletteman.h"
+ 
+ #include "scumm/resource.h"
++#include "graphics/cursorman.h"
+ #include "scumm/scumm.h"
+ #include "scumm/scumm_v6.h"
+ #include "scumm/scumm_v8.h"
+@@ -1780,6 +1781,10 @@ void ScummEngine::updatePalette() {
+ 					paletteColors[i * 3 + 2]);
+ 		}
+ 
++		// The mouse cursor is still drawn from palette indices, so it
++		// needs the colours the backend is no longer being given.
++		CursorMan.replaceCursorPalette(paletteColors, first, num);
++
+ 		if (_macGui)
+ 			_macGui->setPaletteDirty();
+ 		return;
+-- 
+2.43.0
+

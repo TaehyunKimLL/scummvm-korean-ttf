@@ -1,0 +1,16 @@
+# 맵만으로 전부 결정 - scummvm.ini 에는 아무 korean_* 키도 없음
+[hires]
+scale=2
+alpha=true
+
+[fonts]
+default=fonts/neodgm.ttf
+
+[sizes]
+default=16
+
+[render]
+mode=char
+
+[map]
+height_8=default

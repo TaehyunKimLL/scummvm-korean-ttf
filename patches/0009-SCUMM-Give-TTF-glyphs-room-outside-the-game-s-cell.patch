@@ -1,0 +1,89 @@
+From 61de026525b19d44afef049ed3fd7b35c511663b Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Thu, 3 Sep 2026 23:45:21 +0000
+Subject: [PATCH 09/18] SCUMM: Give TTF glyphs room outside the game's cell
+
+The original bitmaps fit exactly inside the character cell, so the dirty
+rectangle could match it. TrueType glyphs do not: ascenders reach above
+the cell and commas hang below it, and whatever falls outside the
+rectangle never gets composited onto the screen.
+
+Add a cell of slack above and below the line instead of clipping the
+font back to the old grid.
+---
+ engines/scumm/charset.cpp | 35 ++++++++++++++++++++++++++++-------
+ 1 file changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index e74aed26..c4c79c65 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -480,6 +480,9 @@ void ScummEngine::selectKorTtfFont(int lineBox) {
+ 		_korTtfSupersample = _korTtfRoleSupersample.contains(role)
+ 			? CLIP<int>(_korTtfRoleSupersample[role], 1, 8) : 1;
+ 		if (_korTtfFont)
++			// A font taller than the line box centres on it and overhangs
++			// both ways; the dirty rectangle carries a cell of slack on
++			// each side so the parts outside still get composited.
+ 			_korTtfYOffset = (lineBox - _korTtfFont->getFontHeight() / _korTtfSupersample) / 2;
+ 		return;
+ 	}
+@@ -621,6 +624,7 @@ bool ScummEngine::drawKorTtfChar(Graphics::Surface &dest, uint16 chr, int x, int
+ 
+ 
+ 
++
+ 	// Alpha path: rasterise the glyph once with anti-aliasing, then store the
+ 	// colour in the text surface and the coverage in the companion channel.
+ 	// compositeHiResText() blends the two against the upscaled background.
+@@ -1625,7 +1629,18 @@ void CharsetRendererV3::printChar(int chr, bool ignoreCharsetMask) {
+ 
+ 	int drawTop = _top - vs->topline;
+ 
+-	_vm->markRectAsDirty(vs->number, _left, _left + width, drawTop, drawTop + height);
++	int dirtyTop = drawTop;
++	int dirtyHeight = height;
++
++	// See the note in CharsetRendererClassic::printChar(): TTF glyphs need
++	// room above and below the game's cell.
++	if (_vm->isKoreanHiRes() && _vm->_korTtfFont) {
++		const int slack = _vm->_2byteHeight;
++		dirtyTop = MAX(0, dirtyTop - slack);
++		dirtyHeight += slack * 2;
++	}
++
++	_vm->markRectAsDirty(vs->number, _left, _left + width, dirtyTop, dirtyTop + dirtyHeight);
+ 
+ 	if (!ignoreCharsetMask) {
+ 		_hasMask = true;
+@@ -1836,15 +1851,21 @@ void CharsetRendererClassic::printChar(int chr, bool ignoreCharsetMask) {
+ 		_left += _origWidth;
+ 		return;
+ 	} else {
++		int dirtyTop = drawTop;
+ 		int dirtyHeight = _height;
+ 
+-		// TrueType glyphs are not bound by the game's cell: a comma sits
+-		// below the baseline and would fall outside the rectangle that
+-		// gets composited, so it would never reach the screen.
+-		if (_vm->isKoreanHiRes() && _vm->_korTtfFont)
+-			dirtyHeight += _vm->_2byteHeight;
++		// TrueType glyphs are not confined to the game's cell the way the
++		// original bitmaps are: ascenders reach above it, commas and
++		// parentheses hang below. Only what falls inside the dirty
++		// rectangle gets composited, so give the line a cell of slack on
++		// each side rather than clipping the font to the old grid.
++		if (_vm->isKoreanHiRes() && _vm->_korTtfFont) {
++			const int slack = _vm->_2byteHeight;
++			dirtyTop = MAX(0, dirtyTop - slack);
++			dirtyHeight += slack * 2;
++		}
+ 
+-		_vm->markRectAsDirty(vs->number, _left, _left + _width, drawTop, drawTop + dirtyHeight);
++		_vm->markRectAsDirty(vs->number, _left, _left + _width, dirtyTop, dirtyTop + dirtyHeight);
+ 	}
+ 
+ 	// This check for kPlatformFMTowns and kMainVirtScreen is at least required for the chat with
+-- 
+2.43.0
+

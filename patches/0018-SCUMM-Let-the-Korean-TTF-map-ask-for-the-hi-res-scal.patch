@@ -1,0 +1,143 @@
+From 13b1ed4ce93bbfc0752d527bad2bb72cf9c90825 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 04:17:29 +0000
+Subject: [PATCH 18/18] SCUMM: Let the Korean TTF map ask for the hi-res scale
+
+Reading the map used to happen inside the `scale > 1` branch, so the map
+could never influence the scale that gated it. Split the config reading
+out of loadKorTtfFont() and run it before that decision instead. It is
+idempotent because setupScumm() needs the answer too - the alpha text
+check runs well before loadCJKFont().
+
+The map can now carry a [hires] section with scale and alpha, and simply
+naming a font implies 2x, since a TrueType face is only worth having at a
+higher resolution. korean_hires_scale still wins when set explicitly, so
+existing targets keep their behaviour.
+
+A translation can now ship a game folder that needs no configuration at
+all: korean_ttf.map next to the data files, fonts in a subfolder, and the
+map itself selecting the resolution its font was drawn for.
+---
+ engines/scumm/charset.cpp | 46 ++++++++++++++++++++++++++++++++++++++-
+ engines/scumm/scumm.cpp   |  5 +++++
+ engines/scumm/scumm.h     |  2 ++
+ 3 files changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 45c51ce6..84eabc8b 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -255,6 +255,11 @@ void ScummEngine::loadKorFont() {
+ 	// low resolution and get scaled up on output, while the text overlay is
+ 	// kept at the higher resolution, so that the glyphs can be rendered with
+ 	// much more detail than the 320x200 framebuffer would ever allow.
++	//
++	// The font map is read first: it may name a font, which implies hi-res
++	// mode, and it may pin the scale outright.
++	loadKorTtfConfig();
++
+ 	if (_koreanHiResScale > 1) {
+ 		if (_game.platform == Common::kPlatformFMTowns || _game.platform == Common::kPlatformPCEngine ||
+ 			_game.platform == Common::kPlatformSegaCD || _game.platform == Common::kPlatformNES ||
+@@ -318,8 +323,19 @@ static Common::Path resolveKorTtfPath(const Common::String &value, const Common:
+ 
+ } // End of anonymous namespace
+ 
+-void ScummEngine::loadKorTtfFont() {
++/**
++ * Read the font map and the related config keys. This runs before hi-res mode
++ * is decided, because the map is allowed to ask for a scale itself: a
++ * translation can then ship a single map file and need no config at all.
++ */
++void ScummEngine::loadKorTtfConfig() {
+ #ifdef USE_FREETYPE2
++	// Called from both setupScumm() and loadCJKFont(); the first one settles
++	// the scale and the alpha mode, the second finds the state already there.
++	if (_korTtfConfigLoaded || !isScummvmKorTarget())
++		return;
++	_korTtfConfigLoaded = true;
++
+ 	_korTtfHeightRoles.clear();
+ 
+ 	// The map may be given as an absolute path, or relative to the game
+@@ -357,6 +373,16 @@ void ScummEngine::loadKorTtfFont() {
+ 			_korTtfTitlePath = _korTtfPath;
+ 	}
+ 
++	// A TrueType font is only worth having at a higher resolution, so having
++	// one configured implies hi-res mode. korean_hires_scale still wins if it
++	// was set explicitly, then the map's own [hires] scale, then this.
++	if (!ConfMan.hasKey("korean_hires_scale") && !_korTtfPath.empty() && _koreanHiResScale < 2)
++		_koreanHiResScale = 2;
++#endif
++}
++
++void ScummEngine::loadKorTtfFont() {
++#ifdef USE_FREETYPE2
+ 	if (_korTtfPath.empty())
+ 		return;
+ 
+@@ -489,6 +515,24 @@ void ScummEngine::loadKorTtfMap(const Common::Path &mapPath) {
+ 	if (getKorTtfMapKey(map, "mode", "render", value))
+ 		_korTtfStringMode = value.equalsIgnoreCase("string");
+ 
++	// [hires] scale pins the text surface multiplier from the map, so a
++	// translation can pick the resolution its font was drawn for without
++	// the user having to add a config key. An explicit korean_hires_scale
++	// still wins.
++	//
++	//   [hires]
++	//   scale=2         ; 1 disables the mode, 3 is the maximum
++	//   alpha=true      ; 32 bit anti-aliased text, needs an RGB backend
++	if (!ConfMan.hasKey("korean_hires_scale") && getKorTtfMapKey(map, "scale", "hires", value)) {
++		const int scale = atoi(value.c_str());
++		if (scale >= 1 && scale <= 3)
++			_koreanHiResScale = scale;
++		else
++			warning("SCUMM::Font: Korean TTF map asks for scale %d, ignoring", scale);
++	}
++	if (!ConfMan.hasKey("korean_alpha_text") && getKorTtfMapKey(map, "alpha", "hires", value))
++		ConfMan.setBool("korean_alpha_text", value.equalsIgnoreCase("true") || atoi(value.c_str()) != 0);
++
+ 	// The height map is merged rather than overridden: the generic section
+ 	// provides the defaults and the specific ones refine individual heights.
+ 	const Common::String mapVer = Common::String::format("map:v%d", _game.version);
+diff --git a/engines/scumm/scumm.cpp b/engines/scumm/scumm.cpp
+index a5724ec9..8eb563ed 100644
+--- a/engines/scumm/scumm.cpp
++++ b/engines/scumm/scumm.cpp
+@@ -1281,6 +1281,11 @@ Common::Error ScummEngine::init() {
+ 	// decision has to be made before loadCJKFont() builds the TTF instances:
+ 	// the glyph renderer differs (anti-aliased vs monochrome).
+ 	//
++	// The font map can request both the scale and the alpha mode, so it has
++	// to be read before either is examined. loadCJKFont() calls this again
++	// later; it is idempotent.
++	loadKorTtfConfig();
++
+ 	// Only the availability check happens here; initGraphics() further down
+ 	// does the actual mode set and may still turn this back off.
+ 	if (isKoreanHiRes() && ConfMan.getBool("korean_alpha_text")) {
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index 1fe48c47..81332380 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1795,6 +1795,7 @@ public:
+ 	bool _korTtfLatin = false;
+ 	bool _korTtfMetrics = false;
+ 	bool _korTtfStringMode = false;
++	bool _korTtfConfigLoaded = false;
+ 	// Sub-pixel pen for TTF metrics: _left advances in game pixels, which
+ 	// loses up to (scale - 1) pixels per glyph. Track the exact scaled
+ 	// position alongside it so the glyphs stay evenly spaced.
+@@ -1803,6 +1804,7 @@ public:
+ 	Common::HashMap<int, int> _korTtfHeightRoles;
+ 	Common::HashMap<int, int> _korTtfRoleSizes;
+ 	Common::HashMap<int, int> _korTtfRoleSupersample;
++	void loadKorTtfConfig();
+ 	void loadKorTtfFont();
+ 	void loadKorTtfMap(const Common::Path &mapPath);
+ 	bool getKorTtfMapKey(const Common::INIFile &map, const Common::String &key,
+-- 
+2.43.0
+

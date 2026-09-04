@@ -1,0 +1,66 @@
+From 02b2b159887c16b1c40e0fab657b4d6c32b73cc6 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 03:20:18 +0000
+Subject: [PATCH 16/18] SCUMM: Support Korean TrueType text on v0-v2
+
+Those games lay their text out on a fixed eight pixel cell and the
+scripts depend on that grid, so the two mechanisms that let the font
+drive the layout have to stay off: run-at-a-time rendering would space
+the glyphs by the font's own advance, and TTF metrics would replace the
+cell width outright. Both now bow out for v0-v2, leaving the glyphs to
+come from the font while the game keeps placing them.
+
+A Hangul syllable occupies one cell, which is 16 pixels at 2x - exactly
+the width of a 16px pixel font such as neodgm - so nothing needs to be
+widened for the characters to sit side by side.
+---
+ engines/scumm/charset.cpp | 19 ++++++++++++-------
+ 1 file changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 2b33ad76..f6eba15a 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -303,13 +303,6 @@ int getKoreanTtfRoleFromName(const Common::String &name) {
+ 
+ void ScummEngine::loadKorTtfFont() {
+ #ifdef USE_FREETYPE2
+-	// v0-v2 lay their text out on a fixed 8 pixel cell and the scripts count
+-	// on it, so a proportional face cannot be fitted into it without the
+-	// glyphs colliding. Those games keep the bitmap font, which the hi-res
+-	// mode still scales up by 2x or 3x.
+-	if (_game.version <= 2)
+-		return;
+-
+ 	_korTtfHeightRoles.clear();
+ 
+ 	Common::Path mapPath;
+@@ -339,6 +332,12 @@ void ScummEngine::loadKorTtfFont() {
+ 	if (_korTtfPath.empty())
+ 		return;
+ 
++	// v0-v2 place every glyph in a fixed cell that the scripts rely on.
++	// Run-at-a-time rendering spaces the glyphs by the font's own advance
++	// and drifts off that grid, so keep those games per-character.
++	if (_game.version <= 2)
++		_korTtfStringMode = false;
++
+ 	Common::FSNode fontNode(_korTtfPath);
+ 	if (!fontNode.exists() || fontNode.isDirectory()) {
+ 		warning("SCUMM::Font: Korean TTF font not found: '%s'", _korTtfPath.toString().c_str());
+@@ -1189,6 +1188,12 @@ int ScummEngine::getKorTtfCharWidth(uint16 chr) {
+ 	if (!_korTtfMetrics || !_korTtfEnabled || !isKoreanHiRes())
+ 		return -1;
+ 
++	// v0-v2 lay their text out on a fixed cell and the scripts depend on it.
++	// Those games are meant to be used with a pixel font that matches the
++	// cell, so keep the grid and only take the glyphs from the font.
++	if (_game.version <= 2)
++		return -1;
++
+ 	// Hangul keeps driving the font size; see drawKorTtfChar().
+ 	if (chr >= 256)
+ 		selectKorTtfFont(_2byteHeight * _koreanHiResScale);
+-- 
+2.43.0
+
