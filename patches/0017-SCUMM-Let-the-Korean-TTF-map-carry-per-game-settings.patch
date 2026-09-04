@@ -1,7 +1,7 @@
 From f092ee2a9d825b5ecc0a53f0c49c3026be9bd8c5 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 04:02:13 +0000
-Subject: [PATCH 17/20] SCUMM: Let the Korean TTF map carry per-game settings
+Subject: [PATCH 17/25] SCUMM: Let the Korean TTF map carry per-game settings
  and relative paths
 
 One map file can now serve several games. A key is looked up in the most

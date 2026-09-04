@@ -1,7 +1,7 @@
 From 2d4bfd764c732fb33040697b7162b4c6ea7ced19 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 00:58:55 +0000
-Subject: [PATCH 13/20] SCUMM: Pack the built-in cursor per byte in Korean
+Subject: [PATCH 13/25] SCUMM: Pack the built-in cursor per byte in Korean
  alpha-text mode
 
 setBuiltinCursor() strides the cursor buffer by the output format's

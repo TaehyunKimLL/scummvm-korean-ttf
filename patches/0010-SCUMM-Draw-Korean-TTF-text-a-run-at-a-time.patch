@@ -1,7 +1,7 @@
 From 1d392574aa9f652215d29f19cedf80a60d737f80 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 00:12:30 +0000
-Subject: [PATCH 10/20] SCUMM: Draw Korean TTF text a run at a time
+Subject: [PATCH 10/25] SCUMM: Draw Korean TTF text a run at a time
 
 Handing the font one glyph at a time forces every character onto the
 game's own grid: the advance gets rounded to a game pixel, the dirty

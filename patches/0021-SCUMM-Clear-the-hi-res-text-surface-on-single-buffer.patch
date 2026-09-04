@@ -1,0 +1,39 @@
+From 10f37548618564a5d82ea9bc2f85fb1f707e4f4b Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 10:40:15 +0000
+Subject: [PATCH 21/25] SCUMM: Clear the hi-res text surface on single buffered
+ games too
+
+restoreCharsetBg() wipes the video buffer and then clears the charset
+mask only when the screen is double buffered. That is enough for the
+built in bitmap fonts, which draw into the buffer that was just wiped,
+but the hi-res text lives in a surface of its own. On v0-v2, where
+hasTwoBuffers is false, nothing ever cleared it and every line stayed
+behind: in Zak two speakers with different colours piled up on the same
+row and the glyphs turned into an unreadable grey and green mess.
+
+Clear the text surface whenever the hi-res path is active.
+---
+ engines/scumm/gfx.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index c54d709a..8353b9c5 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -1478,7 +1478,11 @@ void ScummEngine::restoreCharsetBg() {
+ 			}
+ 		}
+ 
+-		if (vs->hasTwoBuffers || _macScreen) {
++		// The hi-res text lives in its own surface, so wiping the video
++		// buffer above does not touch it. Single buffered games (v0-v2)
++		// never reach the branch below and would keep every line ever
++		// drawn, one on top of the next.
++		if (vs->hasTwoBuffers || _macScreen || isKoreanHiRes()) {
+ 			// Clean out the charset mask
+ 			clearTextSurface();
+ 		}
+-- 
+2.43.0
+

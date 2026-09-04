@@ -1,7 +1,7 @@
 From fc4ea824c59e576db6236722ba11b2bed7e112d3 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 01:31:52 +0000
-Subject: [PATCH 14/20] SCUMM: Don't paint cleared text pixels in Korean
+Subject: [PATCH 14/25] SCUMM: Don't paint cleared text pixels in Korean
  alpha-text mode
 
 The composite treats anything that is not the colour key as text, so a

@@ -1,7 +1,7 @@
 From 112a4b8497a57db1532a8aec607810283f5fb0b0 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 13:01:32 +0000
-Subject: [PATCH 01/20] SCUMM: Add hi-res text mode for Korean fan translations
+Subject: [PATCH 01/25] SCUMM: Add hi-res text mode for Korean fan translations
 
 Mirrors the FM-Towns/PC98 Japanese approach: keep the game graphics at
 their original 320x200 resolution and scale them up on output, while

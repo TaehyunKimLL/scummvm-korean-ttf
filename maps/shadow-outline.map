@@ -1,0 +1,16 @@
+# 글꼴을 갈아끼웠으니 외곽선도 다시 정한다.
+# color 를 함께 주는 편이 좋다: 기본값 0 은 검정이고 자막 배경도 검정인
+# 경우가 많아 mode 만 바꾸면 차이가 보이지 않는다.
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=han%02d.fnt
+
+[shadow]
+mode=outline
+color=4
+
+[map]
+height_24=default

@@ -1,0 +1,21 @@
+# 한글과 라틴 모두 SVFN. 한 줄 안에서 질감이 섞이지 않는다.
+# 굽기:
+#   mkfont.py NanumJangMiCe.ttf han24.fnt --size 32 --cell 24 --bpp 8
+#   mkfont.py ipag.ttf lat24.fnt --size 32 --cell 24 --bpp 8 --latin --fullwidth
+#
+# 전각 라틴은 일본어 글꼴에서 가져와야 한다. 한국어 글꼴의 전각은 반각에
+# 여백만 붙인 것이라 셀 안에서 성겨 보인다.
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=han%02d.fnt
+
+[latin]
+enabled=true
+bitmap=lat24.fnt
+metrics=game
+
+[map]
+height_24=default

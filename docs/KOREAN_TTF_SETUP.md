@@ -148,7 +148,13 @@ file=korean.trs
 [latin]
 enabled=false
 font=fonts/NanumBarunGothic.ttf
-metrics=bitmap
+bitmap=lat24.fnt
+metrics=game
+
+[shadow]
+mode=game
+offset=0
+color=0
 
 [render]
 mode=string
@@ -575,7 +581,92 @@ height_8=default
 
 ---
 
-## 6. 다른 언어에 적용하기
+## 6. 비트맵 폰트 굽기 (SVFN)
+
+`.fnt` 를 확장한 SVFN 형식은 8비트 알파와 글자별 폭을 담는다. 굽는 쪽만
+FreeType 을 쓰므로 **게임을 돌리는 빌드에 FreeType 이 없어도** 안티에일리어싱된
+글자가 나온다. 형식은 `docs/FONT_FORMAT.md` 참조.
+
+```bash
+# 한글 2350자, 8bpp 알파, 32px 로 렌더해 24px 셀에 담기
+python3 scripts/mkfont.py NanumJangMiCe.ttf han24.fnt \
+        --size 32 --cell 24 --bpp 8
+
+# 라틴 256자, 전각 글리프 (v0-v2 처럼 셀이 고정된 엔진용)
+python3 scripts/mkfont.py ipag.ttf lat24.fnt \
+        --size 32 --cell 24 --bpp 8 --latin --fullwidth
+```
+
+| 옵션 | 뜻 |
+|---|---|
+| `--size` | 글꼴을 몇 px 로 렌더할지 |
+| `--cell` | 셀 크기. 손글씨처럼 잉크가 작은 글꼴은 `--size` 를 키우고 `--cell` 로 담는다 |
+| `--bpp 1\|8` | 1 = 흑백, 8 = 알파 |
+| `--latin` | 단일 바이트 폰트. 글리프 번호 = 문자 코드 |
+| `--fullwidth` | 라틴을 전각 글리프로. 셀이 고정된 v0-v2 용 |
+| `--fixed` | 라틴을 고정폭으로 |
+| `--center` | 잉크를 셀 가운데로 (고정폭이면 기본) |
+| `--variable` | 글자별 전진 폭 표를 넣는다 |
+
+맵에서는 `[bitmap]` 과 `[latin] bitmap=` 으로 가리킨다.
+
+```ini
+[bitmap]
+multi=han%02d.fnt
+
+[latin]
+enabled=true
+bitmap=lat24.fnt
+metrics=bitmap        ; 생략하면 게임 원본 폭 (줄바꿈 보존)
+```
+
+**전각 라틴은 일본어 글꼴에서 가져와야 한다.** 한국어 글꼴의 U+FF21 은
+반각 글자에 여백만 붙인 것이라 셀 안에서 성겨 보인다. 실측 결과:
+
+| 글꼴 | 전각 A 잉크 | 반각 A 잉크 | 계조 | 판정 |
+|---|---|---|---|---|
+| MiraeroNormal (한) | 12 | 12 | 2 | 반각+여백 |
+| NotoSansCJK | 22 | 20 | 95 | 전각 아님 |
+| unifont_jp | 22 | 12 | 2 | 전각이나 계단 |
+| **IPA고딕** | **22** | **16** | **89** | **전각 + 안티에일리어싱** |
+
+### v0~v2 의 제약
+
+`CharsetRendererV2::getCharWidth()` 가 8 을 그대로 돌려주므로 **v2 에서는
+`metrics=bitmap` 이 무시된다.** 스크립트가 8px 셀을 전제로 화면을 짜기
+때문이고, 그래서 v2 는 `--fullwidth` 나 `--fixed` 로 구워 셀에 맞추는 것이
+맞다. v3 이상은 두 방식 모두 동작한다.
+
+---
+
+## 7. 외곽선과 그림자
+
+게임의 `_2byteShadow` 는 내장 비트맵 글꼴이 어떻게 그려졌는지를 말할 뿐이라,
+글꼴을 갈아끼우면 맞지 않는다. `[shadow]` 로 덮어쓴다.
+
+```ini
+[shadow]
+mode=outline      ; none | drop | outline | stroke | game
+offset=2          ; 배율을 따르려면 생략
+color=4           ; 팔레트 인덱스
+```
+
+| mode | 모양 |
+|---|---|
+| `none` | 없음 |
+| `drop` | 오른쪽 아래로 한 벌 |
+| `outline` | 여덟 방향 |
+| `stroke` | 외곽선 + 왼쪽 아래 그림자 |
+| `game` | 게임이 정한 대로 (기본) |
+
+TTF · SVFN · 내장 비트맵 **모든 경로**에 적용된다.
+
+**`color` 를 함께 지정하는 편이 좋다.** 그림자 색의 기본값은 0 인데 자막
+배경도 검정인 경우가 많아, `mode` 만 바꾸면 아무 차이가 없어 보인다.
+
+---
+
+## 8. 다른 언어에 적용하기
 
 한국어가 아닌 번역은 인코딩과 파일 이름을 알려주면 됩니다.
 
@@ -665,7 +756,7 @@ v0~v6 (그리고 Full Throttle) 입니다.
 
 ---
 
-## 7. v0~v2 제약
+## 9. v0~v2 제약
 
 `CharsetRendererV2::getCharWidth()`가 **무조건 8을 반환**하고 스크립트가
 그 그리드를 전제로 레이아웃을 계산합니다. 따라서:
@@ -701,7 +792,7 @@ print(len(np.unique(np.asarray(im))))   # 2 = 픽셀 완벽
 
 ---
 
-## 8. 검증 방법
+## 10. 검증 방법
 
 ### 스케일된 스크린샷을 믿지 말 것
 
@@ -754,7 +845,7 @@ if (++dumpN == 40) {
 
 ---
 
-## 9. 알려진 제약
+## 11. 알려진 제약
 
 - **32bit 알파는 OpenGL 전용.** SurfaceSDL 백엔드는 지원 포맷이 모두
   2바이트 이하라 `korean_alpha_text=true`가 무시됩니다.

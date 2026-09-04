@@ -1,7 +1,7 @@
 From b82adefd9664c73a0fd74af0684b501db3173ebb Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 14:30:20 +0000
-Subject: [PATCH 02/20] SCUMM: Render Korean hi-res text with a TrueType font
+Subject: [PATCH 02/25] SCUMM: Render Korean hi-res text with a TrueType font
 
 Builds on the hi-res text mode by replacing the upscaled bitmap glyphs
 with real TrueType output, which is what the extra resolution was for:

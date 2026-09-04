@@ -1,7 +1,7 @@
 From 02b2b159887c16b1c40e0fab657b4d6c32b73cc6 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 03:20:18 +0000
-Subject: [PATCH 16/20] SCUMM: Support Korean TrueType text on v0-v2
+Subject: [PATCH 16/25] SCUMM: Support Korean TrueType text on v0-v2
 
 Those games lay their text out on a fixed eight pixel cell and the
 scripts depend on that grid, so the two mechanisms that let the font

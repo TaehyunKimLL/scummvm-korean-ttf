@@ -1,7 +1,7 @@
 From 07d7ce37f1375c76dc4d49790ac066e0a338af2d Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 00:41:12 +0000
-Subject: [PATCH 11/20] SCUMM: Route verb area Korean text through the text
+Subject: [PATCH 11/25] SCUMM: Route verb area Korean text through the text
  surface
 
 Virtual screens without a back buffer - the verb area, for instance -

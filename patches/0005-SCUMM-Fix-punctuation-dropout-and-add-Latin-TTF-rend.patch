@@ -1,7 +1,7 @@
 From cb1ad1403e2fd699ffdfe2992cbd6dda1169b321 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 22:09:51 +0000
-Subject: [PATCH 05/20] SCUMM: Fix punctuation dropout and add Latin TTF
+Subject: [PATCH 05/25] SCUMM: Fix punctuation dropout and add Latin TTF
  rendering
 
 Two problems with the Korean hi-res text, both around single byte

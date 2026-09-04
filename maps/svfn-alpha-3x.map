@@ -1,0 +1,12 @@
+# SVFN 8bpp 알파, 3배. FreeType 없는 빌드에서도 안티에일리어싱된다.
+# 굽기:
+#   mkfont.py NanumJangMiCe.ttf han24.fnt --size 32 --cell 24 --bpp 8
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=han%02d.fnt
+
+[map]
+height_24=default

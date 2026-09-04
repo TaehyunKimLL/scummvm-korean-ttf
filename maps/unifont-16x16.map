@@ -1,0 +1,18 @@
+# unifont 16x16: 한글과 전각 라틴이 같은 정사각 셀에 들어간다.
+# v0-v2 는 셀이 8px 고정이므로 2배에서 16px 가 정확히 맞는다.
+# 굽기:
+#   mkfont.py unifont_jp.otf uni00.fnt --size 16 --bpp 1
+#   mkfont.py unifont_jp.otf unilat.fnt --size 16 --bpp 1 --latin --fullwidth
+[hires]
+scale=2
+alpha=true
+
+[bitmap]
+multi=uni%02d.fnt
+
+[latin]
+enabled=true
+bitmap=unilat.fnt
+
+[map]
+height_16=default

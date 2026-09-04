@@ -1,7 +1,7 @@
 From 13b1ed4ce93bbfc0752d527bad2bb72cf9c90825 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 04:17:29 +0000
-Subject: [PATCH 18/20] SCUMM: Let the Korean TTF map ask for the hi-res scale
+Subject: [PATCH 18/25] SCUMM: Let the Korean TTF map ask for the hi-res scale
 
 Reading the map used to happen inside the `scale > 1` branch, so the map
 could never influence the scale that gated it. Split the config reading

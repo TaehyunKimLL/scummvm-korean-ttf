@@ -22,6 +22,10 @@ FM-Towns·PC98 일본어 모드가 쓰던 접근을 팬번역에 맞춰 가져�
 - 게임·엔진 버전별 폰트 설정을 맵 파일 하나로
 - CJK 인코딩 선택 (cp949 · cp932 · cp936 · cp950 · johab)
 - 비트맵 폰트와 번역 파일 이름도 맵에서 지정
+- **SVFN** — 8비트 알파를 담는 비트맵 폰트 형식. TTF 에서 구워 두면
+  FreeType 없는 빌드에서도 글자가 매끄럽다
+- 한글과 라틴에 서로 다른 폰트를 물려 한 줄에서 질감이 어긋나지 않게
+- 외곽선·그림자를 글꼴과 무관하게 강제 지정
 
 ## 지원 범위
 
@@ -87,6 +91,23 @@ height_8=default
 | `japanese-cp932.map` | 일본어 팬번역 예제 |
 | `chinese-big5.map` | 중국어 번체 예제 |
 | `chinese-gbk.map` | 중국어 간체 예제 |
+| `svfn-alpha-3x.map` | SVFN 8bpp 알파 (FreeType 불필요) |
+| `svfn-latin.map` | 한글 + 라틴 각각 다른 폰트 |
+| `unifont-16x16.map` | unifont 정사각 셀, v0~v2 2배 |
+| `shadow-outline.map` | 외곽선 강제 |
+
+### 비트맵 폰트 굽기
+
+```bash
+# 한글 2350자, 8bpp 알파
+python3 scripts/mkfont.py NanumJangMiCe.ttf han24.fnt --size 32 --cell 24 --bpp 8
+
+# 라틴 256자, 전각 (셀이 고정된 v0~v2 용)
+python3 scripts/mkfont.py ipag.ttf lat24.fnt --size 32 --cell 24 --bpp 8 --latin --fullwidth
+```
+
+형식은 [docs/FONT_FORMAT.md](docs/FONT_FORMAT.md) 참조. 굽는 쪽만 FreeType 을
+쓰므로 게임을 돌리는 빌드에는 없어도 된다.
 
 ## 폰트 고르기
 
