@@ -1,4 +1,4 @@
-# 맵만으로 전부 결정 - scummvm.ini 에는 아무 korean_* 키도 없음
+# korean_ttf.map — Maniac Mansion
 [hires]
 scale=2
 alpha=true
@@ -7,10 +7,10 @@ alpha=true
 default=fonts/neodgm.ttf
 
 [sizes]
-default=16
+default=16          ; 8px 셀 x2 = 16px. neodgm 의 네이티브 크기
 
 [render]
-mode=char
+mode=char           ; v2 는 어차피 강제로 char
 
 [map]
 height_8=default

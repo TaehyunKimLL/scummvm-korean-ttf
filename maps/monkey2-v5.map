@@ -1,0 +1,22 @@
+# korean_ttf.map — MI2
+[hires]
+scale=3
+alpha=true
+
+[fonts]
+default=fonts/NanumJangMiCe.ttf
+
+[sizes]
+default=12pt
+title=16pt
+
+[translation]
+file=korean.trs     ; 기본값이라 사실 생략 가능
+
+[render]
+mode=string
+
+[map]
+height_8=default
+height_9=default
+height_12=title

@@ -1,0 +1,19 @@
+# korean_ttf.map — Indy4
+[hires]
+scale=3
+alpha=true
+
+[fonts]
+default=fonts/NanumJangMiCe.ttf
+
+[sizes]
+default=12pt
+title=16pt
+
+[render]
+mode=string
+
+[map]
+height_8=default
+height_9=default
+height_16=title     ; 이 게임에만 있는 큰 폰트

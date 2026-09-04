@@ -1,0 +1,26 @@
+# japanese-cp932 예제 — 실제 파일명과 글리프 수는 패치에 맞춰 고칠 것
+[hires]
+scale=2
+alpha=true
+
+[encoding]
+codepage=cp932
+
+[bitmap]
+multi=japanese%02d.fnt
+glyphs=6879         ; JIS X 0208
+
+[fonts]
+default=fonts/misaki_gothic.ttf
+
+[sizes]
+default=16
+
+[translation]
+file=japanese.trs
+
+[render]
+mode=char
+
+[map]
+height_8=default

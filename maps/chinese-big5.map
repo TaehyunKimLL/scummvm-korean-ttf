@@ -1,0 +1,19 @@
+# chinese-big5 예제 — 실제 파일명과 글리프 수는 패치에 맞춰 고칠 것
+[encoding]
+codepage=big5
+
+[bitmap]
+single=chinese.fnt
+glyphs=13053
+
+[fonts]
+default=fonts/wqy-bitmapsong.ttf
+
+[sizes]
+default=16
+
+[translation]
+file=chinese.trs
+
+[map]
+height_8=default

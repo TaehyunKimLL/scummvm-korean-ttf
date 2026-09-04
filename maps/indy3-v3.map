@@ -1,0 +1,17 @@
+# korean_ttf.map — Indy3
+[hires]
+scale=3
+alpha=true
+
+[fonts]
+default=fonts/NanumJangMiCe.ttf
+
+[sizes]
+default=12pt        ; 3배에서 36px
+
+[render]
+mode=string
+
+[map]
+height_8=default
+height_9=default

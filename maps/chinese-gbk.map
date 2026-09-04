@@ -1,0 +1,13 @@
+# chinese-gbk 예제 — 실제 파일명과 글리프 수는 패치에 맞춰 고칠 것
+[encoding]
+codepage=gbk
+
+[bitmap]
+multi=chinese%02d.fnt
+glyphs=6763         ; GB 2312
+
+[fonts]
+default=fonts/wqy-zenhei.ttf
+
+[sizes]
+default=16

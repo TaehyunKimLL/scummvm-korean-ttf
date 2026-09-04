@@ -1,7 +1,7 @@
 From bda1618dbfa815078947f98320f6c182bf380bd2 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 23:32:35 +0000
-Subject: [PATCH 08/18] SCUMM: Use the TTF advance for wrapping too
+Subject: [PATCH 08/20] SCUMM: Use the TTF advance for wrapping too
 
 getStringWidth() and wrapText() add _2byteWidth directly instead of
 going through getCharWidth(), and prepareDraw() reads the advance out

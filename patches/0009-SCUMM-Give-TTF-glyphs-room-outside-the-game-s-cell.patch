@@ -1,7 +1,7 @@
 From 61de026525b19d44afef049ed3fd7b35c511663b Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 23:45:21 +0000
-Subject: [PATCH 09/18] SCUMM: Give TTF glyphs room outside the game's cell
+Subject: [PATCH 09/20] SCUMM: Give TTF glyphs room outside the game's cell
 
 The original bitmaps fit exactly inside the character cell, so the dirty
 rectangle could match it. TrueType glyphs do not: ascenders reach above

@@ -1,0 +1,22 @@
+# korean_ttf.map — MI1
+[hires]
+scale=3
+alpha=true
+
+[fonts]
+default=fonts/NanumJangMiCe.ttf
+bold=fonts/NanumBarunGothicBold.ttf
+title=fonts/NanumJangMiCe.ttf
+
+[sizes]
+default=12pt
+bold=9pt            ; verb 영역은 작게
+title=16pt          ; 크레딧
+
+[render]
+mode=string
+
+[map]
+height_8=bold       ; verb, 인벤토리
+height_9=default    ; 대사
+height_12=title     ; 크레딧

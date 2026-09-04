@@ -1,0 +1,219 @@
+From ffbf2ac974962f2e98ab5abf94f32c00bd8a6d29 Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 07:20:51 +0000
+Subject: [PATCH 20/20] SCUMM: Let the font map drive the bitmap fonts and the
+ translation bundle
+
+The fan translation path had three Korean assumptions left in it: the
+.fnt files had to be named korean%02d.fnt, they had to hold the 2350
+glyphs of KS X 1001, and the runtime translation had to live in
+korean.trs. A Japanese or Chinese translation could supply none of that.
+
+Name all three in the map instead:
+
+  [bitmap]
+  multi=japanese%02d.fnt
+  single=japanese.fnt
+  glyphs=6879
+
+  [translation]
+  file=japanese.trs
+
+The defaults are the Korean ones, so those translations carry on with an
+empty map. get2byteCharPtr() also grew a branch for the case: when the
+map named a bitmap font the glyph order follows the code page rather than
+whatever the original release happened to use, since the files come from
+the translation rather than the game.
+
+Reading the map moved ahead of the font loading, which needs the names it
+carries. It is idempotent, so the later calls are harmless.
+---
+ engines/scumm/charset.cpp | 87 +++++++++++++++++++++++++++++++++++----
+ engines/scumm/scumm.h     |  8 ++++
+ engines/scumm/string.cpp  |  8 +++-
+ 3 files changed, 94 insertions(+), 9 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 9392f262..53cf5a8b 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -105,8 +105,10 @@ void ScummEngine::loadCJKFont() {
+ 	if (_game.id == GID_REBEL1 && _game.platform == Common::kPlatformSegaCD)
+ 		return;
+ 
+-	// Special case for Korean
+-	if (isScummvmKorTarget()) {
++	// The fan translation path: Korean always, and any other CJK language
++	// that ships a font map. Loads the .fnt bitmaps and, when configured,
++	// the TrueType replacement on top.
++	if (isHiResTextTarget()) {
+ 		loadKorFont();
+ 
+ 		return;
+@@ -227,21 +229,31 @@ void ScummEngine::loadCJKFont() {
+ 
+ void ScummEngine::loadKorFont() {
+ 	Common::File fp;
+-	int numChar = 2350;
++
++	// Read the map first: it can name the bitmap fonts and the glyph count,
++	// both of which this function needs. It is idempotent, so the call later
++	// on for the hi-res settings is harmless.
++	loadKorTtfConfig();
++
++	// The map may point at another translation's fonts; the glyph count has
++	// to follow the code page, since it decides how large each file is.
++	int numChar = _cjkFontGlyphs > 0 ? _cjkFontGlyphs : 2350;
++	const char *const multiPattern = _cjkFontPattern.empty()
++		? "korean%02d.fnt" : _cjkFontPattern.c_str();
+ 	_useCJKMode = true;
+ 
+ 	if (_game.version < 7 || _game.id == GID_FT)
+ 		_useMultiFont = true;
+ 
+ 	if (_useMultiFont) {
+-		debug("Loading Korean Multi Font System");
++		debug("Loading CJK Multi Font System");
+ 		_numLoadedFont = 0;
+ 		_2byteFontPtr = nullptr;
+ 		_2byteWidth = 0;
+ 		_2byteHeight = 0;
+ 		for (int i = 0; i < 20; i++) {
+ 			char fontFile[256];
+-			snprintf(fontFile, sizeof(fontFile), "korean%02d.fnt", i);
++			snprintf(fontFile, sizeof(fontFile), multiPattern, i);
+ 			_2byteMultiFontPtr[i] = nullptr;
+ 			if (fp.open(fontFile)) {
+ 				_numLoadedFont++;
+@@ -272,8 +284,10 @@ void ScummEngine::loadKorFont() {
+ 	}
+ 
+ 	if (!_useMultiFont) {
+-		debug("Loading Korean Single Font System");
+-		if (fp.open("korean.fnt")) {
++		debug("Loading CJK Single Font System");
++		const char *const singleName = _cjkFontSingle.empty()
++			? "korean.fnt" : _cjkFontSingle.c_str();
++		if (fp.open(singleName)) {
+ 			fp.seek(2, SEEK_CUR);
+ 			_2byteWidth = fp.readByte();
+ 			_2byteHeight = fp.readByte();
+@@ -606,6 +620,34 @@ void ScummEngine::loadKorTtfMap(const Common::Path &mapPath) {
+ 			warning("SCUMM::Font: unknown TTF code page '%s', keeping the default", value.c_str());
+ 	}
+ 
++	// [bitmap] names the engine's own bitmap fonts, for translations that do
++	// not follow the Korean naming. The glyph count has to match the code
++	// page's character set: 2350 for KS X 1001, 6879 for Shift-JIS and so on.
++	//
++	//   [bitmap]
++	//   multi=japanese%02d.fnt   ; numbered set, one per charset
++	//   single=japanese.fnt      ; fallback when no numbered file is found
++	//   glyphs=6879
++	if (getKorTtfMapKey(map, "multi", "bitmap", value))
++		_cjkFontPattern = value;
++	if (getKorTtfMapKey(map, "single", "bitmap", value))
++		_cjkFontSingle = value;
++	if (getKorTtfMapKey(map, "glyphs", "bitmap", value)) {
++		const int glyphs = atoi(value.c_str());
++		if (glyphs > 0)
++			_cjkFontGlyphs = glyphs;
++		else
++			warning("SCUMM::Font: bad glyph count '%s', keeping the default", value.c_str());
++	}
++
++	// [translation] names the runtime translation bundle when it is not the
++	// default korean.trs. The format is the same either way.
++	//
++	//   [translation]
++	//   file=japanese.trs
++	if (getKorTtfMapKey(map, "file", "translation", value))
++		_cjkTrsName = value;
++
+ 	// The height map is merged rather than overridden: the generic section
+ 	// provides the defaults and the specific ones refine individual heights.
+ 	const Common::String mapVer = Common::String::format("map:v%d", _game.version);
+@@ -1144,6 +1186,37 @@ byte *ScummEngine::get2byteCharPtr(int idx) {
+ 	if (!isScummvmKorTarget() && (_game.platform == Common::kPlatformFMTowns || _game.platform == Common::kPlatformPCEngine))
+ 		return nullptr;
+ 
++	// A fan translation supplies its own .fnt files, so the glyph order is
++	// the code page's rather than whatever the original release used. Take
++	// that route whenever the map named a bitmap font.
++	if (!_cjkFontPattern.empty() || !_cjkFontSingle.empty()) {
++		const uint8 hi = idx % 256;
++		const uint8 lo = idx / 256;
++
++		switch (_ttfCodePage) {
++		case Common::kWindows949:
++			idx = (hi - 0xb0) * 94 + lo - 0xa1;
++			break;
++		case Common::kWindows932:
++			// Shift-JIS: two contiguous lead byte ranges, 188 trail slots.
++			idx = ((hi < 0xe0 ? hi - 0x81 : hi - 0xc1) * 188)
++				+ (lo < 0x7f ? lo - 0x40 : lo - 0x41);
++			break;
++		case Common::kWindows936:
++		case Common::kWindows950:
++			idx = (hi - 0x81) * 191 + lo - 0x40;
++			break;
++		default:
++			idx = (hi - 0xb0) * 94 + lo - 0xa1;
++			break;
++		}
++
++		if (idx < 0)
++			return nullptr;
++
++		return _2byteFontPtr + ((_2byteWidth + 7) / 8) * _2byteHeight * idx;
++	}
++
+ 	switch (_language) {
+ 	case Common::KO_KOR:
+ 		idx = ((idx % 256) - 0xb0) * 94 + (idx / 256) - 0xa1;
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index 5a68ac33..f2fdbe08 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1802,6 +1802,14 @@ public:
+ 	// needs no [encoding] section at all.
+ 	Common::CodePage _ttfCodePage = Common::kWindows949;
+ 	uint16 ttfCharToUnicode(uint16 chr) const;
++	// Bitmap font override from the map: pattern such as "japanese%02d.fnt"
++	// plus the number of glyphs the file holds. Empty means the built-in
++	// Korean naming and the 2350 glyph KS X 1001 set.
++	Common::String _cjkFontPattern;
++	Common::String _cjkFontSingle;
++	int _cjkFontGlyphs = 0;
++	// Translation bundle name, when it is not the default korean.trs.
++	Common::String _cjkTrsName;
+ 	// Sub-pixel pen for TTF metrics: _left advances in game pixels, which
+ 	// loses up to (scale - 1) pixels per glyph. Track the exact scaled
+ 	// position alongside it so the glyphs stay evenly spaced.
+diff --git a/engines/scumm/string.cpp b/engines/scumm/string.cpp
+index ebb998ec..f37c09de 100644
+--- a/engines/scumm/string.cpp
++++ b/engines/scumm/string.cpp
+@@ -2331,13 +2331,17 @@ void ScummEngine_v7::translateText(const byte *text, byte *trans_buff, int trans
+ #endif
+ 
+ void ScummEngine::loadLanguageBundle() {
+-	if (!isScummvmKorTarget()) {
++	if (!isHiResTextTarget()) {
+ 		_existLanguageFile = false;
+ 		return;
+ 	}
+ 
++	// The map is read here too, since it may rename the bundle. Korean
++	// translations keep the historical korean.trs without saying anything.
++	loadKorTtfConfig();
++
+ 	ScummFile file(this);
+-	openFile(file, "korean.trs");
++	openFile(file, _cjkTrsName.empty() ? "korean.trs" : _cjkTrsName.c_str());
+ 
+ 	if (!file.isOpen()) {
+ 		_existLanguageFile = false;
+-- 
+2.43.0
+

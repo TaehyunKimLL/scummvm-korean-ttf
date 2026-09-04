@@ -1,7 +1,7 @@
 From 4c13c7a47114821a7c00d5244d9b9c3cf5f4e1f0 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 22:35:02 +0000
-Subject: [PATCH 06/18] SCUMM: Keep the Korean TTF size stable across a line
+Subject: [PATCH 06/20] SCUMM: Keep the Korean TTF size stable across a line
 
 selectKorTtfFont() derives its size from _2byteHeight, which describes
 the Hangul metrics and is not updated for single byte characters. With

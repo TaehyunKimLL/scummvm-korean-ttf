@@ -1,33 +1,23 @@
-# 통합 한글 TTF 맵 - 엔진 버전/게임별 섹션 지원
-#
-# 섹션 우선순위 (구체적인 것이 이김):
-#   [fonts:maniac]  게임 id
-#   [fonts:v2]      SCUMM 버전
-#   [fonts]         공통
-#
-# v2 (Maniac Mansion): 8px 고정 셀 -> 셀에 맞는 픽셀 폰트만 가능.
-#                      neodgm 은 16px 에서 네이티브(계조 3).
-# v3+ (Indy3/MI1/MI2/Indy4): 가변폭 가능 -> 손글씨체 + 문자열 렌더링.
+# korean_ttf.map — 공용
+[hires]
+scale=3
+alpha=true
+
+[hires:v2]
+scale=2             ; v2 는 2배 (16px 픽셀 폰트에 맞춤)
 
 [fonts]
-default=fonts/NanumJangMiCe.ttf
-bold=fonts/NanumJangMiCe.ttf
-title=fonts/NanumJangMiCe.ttf
+default=fonts/NanumJangMiCe.ttf     ; v3+ 가변폭
 
 [fonts:v2]
-default=fonts/neodgm.ttf
-bold=fonts/neodgm.ttf
-title=fonts/neodgm.ttf
+default=fonts/neodgm.ttf            ; v2 픽셀 폰트
 
 [sizes]
 default=12pt
-bold=12pt
 title=16pt
 
 [sizes:v2]
 default=16
-bold=16
-title=16
 
 [render]
 mode=string
@@ -36,12 +26,12 @@ mode=string
 mode=char
 
 [map]
-height_8=bold
+height_8=default
 height_9=default
 height_12=title
 
-[map:v2]
-height_8=default
-
 [map:indy4]
 height_16=title
+
+[map:maniac]
+height_8=default
