@@ -1,7 +1,7 @@
 From 4ff470d3468bde3a81fab5f3d98ed2939c60dd15 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 11:09:09 +0000
-Subject: [PATCH 22/25] SCUMM: Harden the font map against untrusted input
+Subject: [PATCH 22/28] SCUMM: Harden the font map against untrusted input
 
 Three problems found by review of the CJK generalisation:
 

@@ -1,0 +1,16 @@
+# Indy3: 가변폭 SVFN, 한글+반각 라틴 모두 장미체.
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=vj%02d.fnt
+
+[latin]
+enabled=true
+bitmap=vjlat.fnt
+metrics=bitmap
+
+[map]
+height_24=default
+height_27=default

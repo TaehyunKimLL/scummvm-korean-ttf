@@ -1,7 +1,7 @@
 From 38ee261d7f3dd7c6663af06350a8920c404b0935 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 07:14:22 +0000
-Subject: [PATCH 19/25] SCUMM: Generalise the hi-res TrueType text to any CJK
+Subject: [PATCH 19/28] SCUMM: Generalise the hi-res TrueType text to any CJK
  translation
 
 The path was written for the Korean fan translations and had their code

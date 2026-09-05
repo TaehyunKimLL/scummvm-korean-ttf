@@ -1,7 +1,7 @@
 From b2eb1955459764589740b0488a8a732dd728e898 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 02:28:14 +0000
-Subject: [PATCH 15/25] SCUMM: Keep the Korean bitmap font on v0-v2
+Subject: [PATCH 15/28] SCUMM: Keep the Korean bitmap font on v0-v2
 
 The v0-v2 charset renderer lays its text out on a fixed eight pixel cell
 and the scripts depend on that grid, so a proportional TrueType face

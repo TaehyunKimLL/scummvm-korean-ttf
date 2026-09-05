@@ -1,7 +1,7 @@
 From a081e0c29faf1d8b0da6ba554c05f4a831e1b60f Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 21:28:06 +0000
-Subject: [PATCH 04/25] SCUMM: Add 32bpp alpha blending for Korean hi-res text
+Subject: [PATCH 04/28] SCUMM: Add 32bpp alpha blending for Korean hi-res text
 
 The Korean hi-res text mode so far rendered its TrueType glyphs through
 a monochrome rasteriser, because the text surface is CLUT8 and uses a

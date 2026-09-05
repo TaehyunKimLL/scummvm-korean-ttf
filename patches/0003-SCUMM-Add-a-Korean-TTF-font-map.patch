@@ -1,7 +1,7 @@
 From dc307c76d31696bbcbb77c624fd3d13fbc382859 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 15:09:14 +0000
-Subject: [PATCH 03/25] SCUMM: Add a Korean TTF font map
+Subject: [PATCH 03/28] SCUMM: Add a Korean TTF font map
 
 Move Korean hi-res TTF face selection out of hardcoded per-option logic
 and into a small INI-style map file selected by korean_ttf_map.

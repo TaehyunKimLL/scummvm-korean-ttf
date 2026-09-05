@@ -1,7 +1,7 @@
 From 5b92f3ac038baf651f4eec0b41b40564094a1675 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 11:47:24 +0000
-Subject: [PATCH 23/25] SCUMM: Read the font map without FreeType, and bound
+Subject: [PATCH 23/28] SCUMM: Read the font map without FreeType, and bound
  the scaled blocks
 
 The map file carries more than TrueType settings: the code page, the

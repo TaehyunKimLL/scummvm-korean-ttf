@@ -1,7 +1,7 @@
 From 86bc94a8bf4fadfddc319e0d7c6302885216285c Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 12:58:33 +0000
-Subject: [PATCH 24/25] SCUMM: Add an extended bitmap font format with 8bpp
+Subject: [PATCH 24/28] SCUMM: Add an extended bitmap font format with 8bpp
  coverage
 
 The fan translation .fnt holds 1bpp glyphs in a fixed 2350 entry grid and

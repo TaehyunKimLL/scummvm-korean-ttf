@@ -1,0 +1,19 @@
+# Indy4: 가변폭 SVFN. 한글도 라틴도 장미체에서 굽는다.
+# v3 이후는 문자마다 폭이 달라도 되므로 라틴은 반각 비례폭이 맞다.
+# (전각은 v0-v2 의 고정 8px 그리드용)
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=i4v%02d.fnt
+
+[latin]
+enabled=true
+bitmap=i4vlat.fnt
+metrics=bitmap
+
+[map]
+height_24=default
+height_27=default
+height_48=default

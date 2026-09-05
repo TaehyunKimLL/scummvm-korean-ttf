@@ -1,7 +1,7 @@
 From af98e030ecc8cbd0f807a6db832704a7fd93c629 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 14:08:05 +0000
-Subject: [PATCH 25/25] SCUMM: Give the hi-res text its own outline and shadow
+Subject: [PATCH 25/28] SCUMM: Give the hi-res text its own outline and shadow
  settings
 
 drawSvfnGlyph() took a shadow colour and never used it, so a glyph from

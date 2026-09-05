@@ -1,7 +1,7 @@
 From ffbf2ac974962f2e98ab5abf94f32c00bd8a6d29 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 07:20:51 +0000
-Subject: [PATCH 20/25] SCUMM: Let the font map drive the bitmap fonts and the
+Subject: [PATCH 20/28] SCUMM: Let the font map drive the bitmap fonts and the
  translation bundle
 
 The fan translation path had three Korean assumptions left in it: the

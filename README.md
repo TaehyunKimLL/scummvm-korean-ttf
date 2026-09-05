@@ -34,8 +34,10 @@ FM-Towns·PC98 일본어 모드가 쓰던 접근을 팬번역에 맞춰 가져�
 | Monkey Island 1 | v5 | 확인 |
 | Monkey Island 2 | v5 | 확인 |
 | Indiana Jones 4: Fate of Atlantis | v5 | 확인 |
-| Indiana Jones 3: Last Crusade | v3 | 확인 |
+| Loom (CD) | v4 | 확인 |
+| Indiana Jones 3: Last Crusade | v3 | 확인 (가변폭) |
 | Maniac Mansion | v2 | 확인 (고정 셀, 픽셀 폰트만) |
+| Zak McKracken | v2 | 확인 (고정 셀, 픽셀 폰트만) |
 
 v0~v2 는 스크립트가 8픽셀 고정 셀을 전제로 레이아웃을 잡으므로 그 셀에
 맞는 픽셀 폰트만 쓸 수 있다. v3 이상은 가변폭 폰트도 된다.

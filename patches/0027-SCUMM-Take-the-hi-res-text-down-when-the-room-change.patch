@@ -1,0 +1,206 @@
+From eeac75fd3a5032f23c62d6817f540794d23e7feb Mon Sep 17 00:00:00 2001
+From: Taehyun Kim <dice.thkim@gmail.com>
+Date: Fri, 4 Sep 2026 19:43:58 +0000
+Subject: [PATCH 27/28] SCUMM: Take the hi-res text down when the room changes
+
+Text left over from the previous room stayed on screen: the intro
+credits in Indy3 sat on top of the verbs for the rest of the game.
+
+The hi-res text lives in a surface of its own, which the room change
+never touched - the video buffer was repainted from the new room and the
+stale text was composited straight back over it. Clear it in startScene()
+alongside the stopTalk() that already takes down actor speech.
+
+Clearing alone is not enough. The verb strip is drawn once and then left
+alone; it only reaches the screen again when something marks it dirty, so
+the cleared surface would not be composited there and the text stayed
+visible. Mark the screens dirty after clearing.
+---
+ engines/scumm/charset.cpp | 41 ++++++++++++++++++++++++++++++++++-----
+ engines/scumm/gfx.cpp     |  5 +++++
+ engines/scumm/room.cpp    | 24 +++++++++++++++++++++++
+ engines/scumm/scumm.h     |  9 +++++++++
+ 4 files changed, 74 insertions(+), 5 deletions(-)
+
+diff --git a/engines/scumm/charset.cpp b/engines/scumm/charset.cpp
+index 541e76e4..fa1949bf 100644
+--- a/engines/scumm/charset.cpp
++++ b/engines/scumm/charset.cpp
+@@ -382,8 +382,25 @@ const byte *ScummEngine::getSvfnGlyph(const SvfnFont &font, int idx) const {
+  * there is no pixel doubling, because the font was baked for the scaled
+  * surface in the first place.
+  */
++/**
++ * Record that the hi-res text surface now has ink at this spot.
++ *
++ * The charset renderer's own mask only covers text it means to erase
++ * itself. Anything drawn with ignoreCharsetMask set - the verb area, the
++ * sentence line - never enters it, so nothing would ever clear those
++ * glyphs off the scaled surface and they survive into the next room.
++ */
++void ScummEngine::noteHiResTextDrawn(int x, int y, int w, int h) {
++	const Common::Rect r(x, y, x + w, y + h);
++	if (_hiResTextDirty.isEmpty())
++		_hiResTextDirty = r;
++	else
++		_hiResTextDirty.extend(r);
++}
++
+ bool ScummEngine::drawSvfnGlyph(Graphics::Surface &dest, const SvfnFont &font, int idx,
+ 								int x, int y, byte color, byte shadowColor) {
++
+ 	const byte *glyph = getSvfnGlyph(font, idx);
+ 	if (!glyph)
+ 		return false;
+@@ -475,6 +492,10 @@ bool ScummEngine::drawSvfnGlyph(Graphics::Surface &dest, const SvfnFont &font, i
+ 		}
+ 	}
+ 
++	// Remember what the hi-res surface now holds so it can be taken down
++	// later: the engine's charset mask does not track this text.
++	noteHiResTextDrawn(x, y, font.cellW, font.cellH);
++
+ 	return true;
+ }
+ 
+@@ -1646,6 +1667,12 @@ bool ScummEngine::drawKorTtfChar(Graphics::Surface &dest, uint16 chr, int x, int
+ 	}
+ 
+ 	_korTtfFont->drawChar(&dest, unicode, tx, ty, color);
++
++	// Same bookkeeping as the bitmap path: the charset mask will not
++	// account for this text, so remember it here.
++	noteHiResTextDrawn(x, y, _2byteWidth * _koreanHiResScale,
++					   _2byteHeight * _koreanHiResScale);
++
+ 	return true;
+ #else
+ 	return false;
+@@ -2522,6 +2549,7 @@ void CharsetRendererPCE::setColor(byte color, bool) {
+ #endif
+ 
+ void CharsetRendererV3::printChar(int chr, bool ignoreCharsetMask) {
++
+ 	// WORKAROUND for bug #2703: Indy3 Mac does not show black
+ 	// characters (such as in the grail diary) if ignoreCharsetMask
+ 	// is true. See also bug #8759.
+@@ -2623,16 +2651,19 @@ void CharsetRendererV3::printChar(int chr, bool ignoreCharsetMask) {
+ #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
+ 		&& (_vm->_game.platform != Common::kPlatformFMTowns)
+ #endif
+-		)
++		) {
+ 		drawBits1(*vs, _left + vs->xstart, drawTop, charPtr, drawTop, origWidth, origHeight);
++	}
+ #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
+ 	else if (_vm->_game.platform == Common::kPlatformFMTowns && vs->number == kBannerVirtScreen)
+ 		drawBits1(*vs, _left * _vm->_textSurfaceMultiplier, drawTop * _vm->_textSurfaceMultiplier, charPtr, drawTop, origWidth, origHeight);
+ #endif
+-	else if (!drawHiResKorChar(_vm->_textSurface,
+-			_left * _vm->_textSurfaceMultiplier,
+-			(_top - _vm->_screenTop) * _vm->_textSurfaceMultiplier, drawTop, static_cast<uint16>(chr)))
+-		drawBits1(_vm->_textSurface, _left * _vm->_textSurfaceMultiplier, _top * _vm->_textSurfaceMultiplier, charPtr, drawTop, origWidth, origHeight);
++	else {
++		if (!drawHiResKorChar(_vm->_textSurface,
++				_left * _vm->_textSurfaceMultiplier,
++				(_top - _vm->_screenTop) * _vm->_textSurfaceMultiplier, drawTop, static_cast<uint16>(chr)))
++			drawBits1(_vm->_textSurface, _left * _vm->_textSurfaceMultiplier, _top * _vm->_textSurfaceMultiplier, charPtr, drawTop, origWidth, origHeight);
++	}
+ 
+ 	// The double byte advance is expressed in the scaled coordinates the
+ 	// original CJK modes set up, so it gets divided back down here. Korean
+diff --git a/engines/scumm/gfx.cpp b/engines/scumm/gfx.cpp
+index 8353b9c5..2d6e5c4b 100644
+--- a/engines/scumm/gfx.cpp
++++ b/engines/scumm/gfx.cpp
+@@ -537,6 +537,8 @@ void ScummEngine::drawDirtyScreenParts() {
+ 	// the dirty rectangles are composited.
+ 	korTtfRunFlush();
+ 
++
++
+ 	// Update verbs
+ 	updateDirtyScreen(kVerbVirtScreen);
+ 
+@@ -1498,6 +1500,9 @@ void ScummEngine::clearTextSurface() {
+ 	_korTtfRun.clear();
+ 	_korTtfRunActive = false;
+ 
++	// Nothing is left on the surface after this.
++	_hiResTextDirty = Common::Rect();
++
+ 	towns_fillTopLayerRect(0, 0, _textSurface.w, _textSurface.h, 0);
+ 	fill((byte *)_textSurface.getPixels(), _textSurface.pitch,
+ #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
+diff --git a/engines/scumm/room.cpp b/engines/scumm/room.cpp
+index 9145b896..ff2480dc 100644
+--- a/engines/scumm/room.cpp
++++ b/engines/scumm/room.cpp
+@@ -31,6 +31,7 @@
+ #include "scumm/scumm_v3.h"
+ #include "scumm/scumm_v7.h"
+ #include "scumm/sound.h"
++#include "scumm/usage_bits.h"
+ #include "scumm/util.h"
+ 
+ namespace Scumm {
+@@ -52,6 +53,29 @@ void ScummEngine::startScene(int room, Actor *a, int objectNr) {
+ 
+ 	stopTalk();
+ 
++	// The hi-res text sits in its own surface, which the room change does
++	// not otherwise touch: the video buffer is repainted from the new room
++	// but the text layer is composited on top of it untouched. Without this
++	// the last lines of the old room stay on screen, and once the new room
++	// draws its own text the two pile up on each other.
++	//
++	// stopTalk() above already took down the actor speech; this covers the
++	// rest, including text drawn by scripts that never set the charset mask.
++	if (isKoreanHiRes()) {
++		clearTextSurface();
++
++		// Clearing the surface is only half of it. The verb strip is drawn
++		// once and then left alone - it only reaches the screen again when
++		// something marks it dirty - so the text we just wiped would stay
++		// visible there. Mark every screen dirty so the cleared surface is
++		// actually composited over the new room.
++		for (int i = 0; i < 3; ++i) {
++			VirtScreen *v = &_virtscr[i];
++			if (v->h)
++				markRectAsDirty((VirtScreenNumber)i, Common::Rect(v->w, v->h), USAGE_BIT_RESTORED);
++		}
++	}
++
+ 	fadeOut(_switchRoomEffect2);
+ 	_newEffect = _switchRoomEffect;
+ 
+diff --git a/engines/scumm/scumm.h b/engines/scumm/scumm.h
+index bb76e02c..09929d92 100644
+--- a/engines/scumm/scumm.h
++++ b/engines/scumm/scumm.h
+@@ -1840,6 +1840,14 @@ public:
+ 	// own metrics and its line breaks, true takes them from the font.
+ 	bool _svfnLatinMetrics = false;
+ 
++	// The area of the hi-res text surface that currently holds glyphs.
++	// The engine's own charset mask (_charset->_hasMask) only covers text
++	// it expects to take down itself; text drawn with ignoreCharsetMask
++	// set, or left over from a previous room, is invisible to it. This
++	// rectangle is what the hi-res surface actually has on it, so it can
++	// be cleared without waiting for the charset to admit ownership.
++	Common::Rect _hiResTextDirty;
++
+ 	// Outline and drop shadow for the hi-res paths. The game's own value
+ 	// (_2byteShadow) only reaches the built-in bitmap blitter, so without
+ 	// this a TrueType or SVFN glyph comes out flat no matter what the
+@@ -1862,6 +1870,7 @@ public:
+ 	int getSvfnWidth(uint16 chr) const;
+ 	bool parseSvfnHeader(const byte *buf, uint32 size, SvfnFont &out) const;
+ 	const byte *getSvfnGlyph(const SvfnFont &font, int idx) const;
++	void noteHiResTextDrawn(int x, int y, int w, int h);
+ 	bool drawSvfnGlyph(Graphics::Surface &dest, const SvfnFont &font, int idx,
+ 					   int x, int y, byte color, byte shadowColor);
+ 	// Translation bundle name, when it is not the default korean.trs.
+-- 
+2.43.0
+

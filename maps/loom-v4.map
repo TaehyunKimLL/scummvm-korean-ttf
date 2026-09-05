@@ -1,0 +1,19 @@
+# Loom (v4) CD: 가변폭 SVFN, 장미체 한글 + 반각 라틴
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=lm%02d.fnt
+
+[translation]
+file=korean.trs
+
+[latin]
+enabled=true
+bitmap=lmlat.fnt
+metrics=bitmap
+
+[map]
+height_24=default
+height_27=default

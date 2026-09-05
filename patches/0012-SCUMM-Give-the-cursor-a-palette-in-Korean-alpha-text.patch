@@ -1,7 +1,7 @@
 From 856aed985859c663d459a8821799ddc79421ddf7 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 00:50:40 +0000
-Subject: [PATCH 12/25] SCUMM: Give the cursor a palette in Korean alpha-text
+Subject: [PATCH 12/28] SCUMM: Give the cursor a palette in Korean alpha-text
  mode
 
 The 32bpp path keeps the palette to itself and converts when it builds

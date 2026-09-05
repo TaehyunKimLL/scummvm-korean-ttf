@@ -639,7 +639,39 @@ metrics=bitmap        ; 생략하면 게임 원본 폭 (줄바꿈 보존)
 
 ---
 
-## 7. 외곽선과 그림자
+## 7. 검증된 게임
+
+| 게임 | 엔진 | 폰트 높이 | 비고 |
+|---|---|---|---|
+| Maniac Mansion | v2 | 8 | 고정 셀 (getCharWidth 8 고정) |
+| Zak McKracken | v2 | 8 | 고정 셀 |
+| Indiana Jones 3 | v3 | 8, 9 | 가변폭 가능 |
+| **Loom CD** | **v4** | **8, 9** | |
+| Monkey Island 1 | v5 | 11, 8, 9, 8, 13 | |
+| Monkey Island 2 | v5 | 8, 9, 12 | |
+| Indiana Jones 4 | v5 | 8, 9, 16 | |
+
+폰트 높이는 게임 폴더의 `korean%02d.fnt` 헤더 4번째 바이트에 있다.
+`scripts/bakeset.sh` 가 이 높이에 맞춰 SVFN 한 벌을 구워 준다.
+
+```bash
+scripts/bakeset.sh NanumJangMiCe.ttf ipag.ttf 3 out 8 9 16
+# -> out/han08.fnt(24px 셀) han09.fnt(27px) han16.fnt(48px) + lat*
+```
+
+### 게임별 시작 관문
+
+렌더링을 확인하려면 먼저 게임 화면까지 들어가야 하는데, 게임마다 막히는
+지점이 다르다. 여기서 멈춘 것을 렌더러 문제로 오해하기 쉽다.
+
+- **Monkey Island 2** — 보라색 화면에 상자 두 개. 왼쪽을 눌러야 넘어간다.
+- **Loom CD** — ScummVM 의 CD 오디오 안내(모달) → 난이도 → 길드 심볼
+  복사방지. 안내는 게임 폴더에 빈 `CDDA.SOU` 를 두면 건너뛴다.
+  복사방지는 매뉴얼이 있어야 통과할 수 있다.
+- **Indiana Jones 4** — 도입부 컷신이 길다. 세이브를 만들어 두고
+  `--save-slot` 으로 건너뛰는 편이 빠르다.
+
+## 8. 외곽선과 그림자
 
 게임의 `_2byteShadow` 는 내장 비트맵 글꼴이 어떻게 그려졌는지를 말할 뿐이라,
 글꼴을 갈아끼우면 맞지 않는다. `[shadow]` 로 덮어쓴다.

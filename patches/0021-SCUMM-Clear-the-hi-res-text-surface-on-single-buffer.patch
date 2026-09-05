@@ -1,7 +1,7 @@
 From 10f37548618564a5d82ea9bc2f85fb1f707e4f4b Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Fri, 4 Sep 2026 10:40:15 +0000
-Subject: [PATCH 21/25] SCUMM: Clear the hi-res text surface on single buffered
+Subject: [PATCH 21/28] SCUMM: Clear the hi-res text surface on single buffered
  games too
 
 restoreCharsetBg() wipes the video buffer and then clears the charset

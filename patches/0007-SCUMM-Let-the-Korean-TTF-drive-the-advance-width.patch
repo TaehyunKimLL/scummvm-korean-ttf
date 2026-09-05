@@ -1,7 +1,7 @@
 From 769a66b198c368fb0c64a301224457a06149f756 Mon Sep 17 00:00:00 2001
 From: Taehyun Kim <dice.thkim@gmail.com>
 Date: Thu, 3 Sep 2026 22:50:53 +0000
-Subject: [PATCH 07/25] SCUMM: Let the Korean TTF drive the advance width
+Subject: [PATCH 07/28] SCUMM: Let the Korean TTF drive the advance width
 
 Optional counterpart to the [latin] rendering: with "metrics=ttf" the
 advance comes from the TrueType font instead of the game's bitmap cell,

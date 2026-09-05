@@ -1,0 +1,20 @@
+# MI2: 장미체 한글 + IPA고딕 전각 라틴, 8bpp 알파, 3배
+# 게임 폰트 번호별로 높이가 달라(8/9/12) 각각 구웠다.
+[hires]
+scale=3
+alpha=true
+
+[bitmap]
+multi=svfn%02d.fnt
+
+[latin]
+enabled=true
+bitmap=svfnlat.fnt
+
+[shadow]
+mode=game
+
+[map]
+height_24=default
+height_27=default
+height_36=default
