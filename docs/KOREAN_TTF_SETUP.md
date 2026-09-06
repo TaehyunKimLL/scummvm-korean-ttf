@@ -1,3 +1,5 @@
+> **구형 문서.** `korean_ttf.map`/TrueType 로더 기준이며 현재 `hires-text` 브랜치는 `korean_ttf_map`을 읽지 않는다. 현행은 `HIRES_TEXT_SETUP.md`.
+
 # CJK 고해상도 TTF 설정 설명서
 
 ScummVM 한글·일본어·중국어 팬번역 텍스트를 TrueType 폰트로 2배/3배 해상도
