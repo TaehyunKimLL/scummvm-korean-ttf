@@ -1,5 +1,10 @@
 # Hi-res 텍스트 설정 (현행)
 
+> **현행 문서는 소스 트리 안에 있습니다: `engines/scumm/HIRES_TEXT_SETUP.md`.**
+> 그쪽이 코드에서 직접 확인한 전체 레퍼런스이고 GUI 체크박스도 다룹니다.
+> 이 파일은 그 이전 요약이라 `korean_ttf` 키를 아직 언급합니다.
+
+
 `KOREAN_TTF_SETUP.md`는 구형(TrueType 로더, `korean_ttf.map`) 문서다. 현재
 브랜치(`hires-text`, 커밋 `ef95aaca144` 이후)는 이 문서를 따른다.
 
