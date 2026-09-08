@@ -25,13 +25,16 @@
 | `COMPOSITOR_PLAN.md` | 싱크 추상화 (완료, Mac 전제 오류 정정 포함) |
 | `TEST_GAME.md` | 합성 게임 리소스 실험 — 검출·인덱스까지 성공, 미완 |
 | `GUI_HIRES_TOGGLES.md` | GUI 체크박스 두 개 — 조사·측정·구현 결과 |
+| `MAC_GLYPH_SOURCE_DESIGN.md` | **Mac 렌더러 설계 결정문** — 훅 위치, 안티에일리어싱 불가 근거, A/B/C 선택지와 사용자 결정 대기 항목 |
 
 ### 측정 기록
 
 `ALPHA_PALETTE_CASES.md`, `GLYPH_AUDIT.md`, `MI2_VERB_LOSS.md`,
 `FONT_FORMAT.md`, `OUTLINE_REFERENCES.md`, `NEEDED_GAME_DATA.md`,
 `REGRESSION_HARNESS.md`, `TEST_MATRIX.md`, `LOOM_MOUSE_DEBUG.md`,
-`REVIEW_BRIEF.md`
+`REVIEW_BRIEF.md`, `B2_MAC_RENDERER.md`(Mac 데이터 흐름 실측),
+`B2b_MAC_GLYPH_SOURCE.md`(훅 위치 조사) — 뒤 둘의 결론은
+`MAC_GLYPH_SOURCE_DESIGN.md` 로 합쳐져 있습니다
 
 ### 작업 보드
 
