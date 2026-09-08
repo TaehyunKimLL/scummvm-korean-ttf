@@ -76,7 +76,7 @@ def glyph_chars(codepage, count):
         yield i, ch
 
 
-def render(font, ch, cell_w, cell_h, ascent, bpp, center=False):
+def render(font, ch, cell_w, cell_h, ascent, bpp, center=False, outline=0):
     """글자 하나를 셀에 그려 (픽셀들, 잉크왼쪽, 잉크폭) 로 돌려준다.
 
     center 를 켜면 잉크를 셀 가운데에 놓는다. 고정폭으로 구울 때 쓴다:
@@ -110,7 +110,11 @@ def render(font, ch, cell_w, cell_h, ascent, bpp, center=False):
 
     draw = ImageDraw.Draw(img)
     try:
-        draw.text((dx, dy), ch, font=font, fill=255, anchor="ls")
+        if outline:
+            draw.text((dx, dy), ch, font=font, fill=255, anchor="ls",
+                      stroke_width=outline, stroke_fill=255)
+        else:
+            draw.text((dx, dy), ch, font=font, fill=255, anchor="ls")
     except (ValueError, OSError):
         draw.text((dx, 0), ch, font=font, fill=255)
 
@@ -168,10 +172,17 @@ def main():
     ap.add_argument("--latin", action="store_true",
                     help="단일 바이트 폰트를 굽는다. 글리프 번호가 곧 문자 코드이고 "
                          "가변폭이 기본이다")
+    ap.add_argument("--ink-advance", action="store_true",
+                    help="가변폭 advance 를 폰트 metric 이 아니라 실제 잉크 폭에서 잡는다. "
+                         "CJK 폰트는 모든 글자에 같은 advance 를 보고하므로 "
+                         "한글을 가변폭으로 구우려면 이 옵션이 필요하다")
     ap.add_argument("--variable", action="store_true",
                     help="글자별 전진 폭 표를 넣는다")
     ap.add_argument("--ascent", type=int, default=0,
                     help="기준선 위치. 생략하면 셀 높이의 약 80%%")
+    ap.add_argument("--outline", type=int, default=0,
+                    help="글리프에 N px 외곽선을 구워 넣는다. 알파 합성에서 외곽선이 "
+                         "배경과 섞여 흐려지는 것을 막는다")
     ap.add_argument("--shadow", type=int, default=0xFF,
                     help="기존 그림자 방식 0~3, 없으면 255")
     ap.add_argument("--count", type=int, default=0,
@@ -226,7 +237,8 @@ def main():
 
     for idx, ch in glyph_chars(codepage, count):
         img, ink_x, ink_w = render(font, ch, cell_w, cell_h, ascent,
-                                         args.bpp, center=center)
+                                         args.bpp, center=center,
+                                         outline=args.outline)
         if ch is None or ink_w == 0:
             missing += 1
         ink_max = max(ink_max, ink_w)
@@ -234,7 +246,23 @@ def main():
         glyphs += pack_glyph(img, cell_w, cell_h, args.bpp)
 
         if variable:
-            adv = int(round(font.getlength(ch))) if ch else cell_w
+            if args.ink_advance and ch and ink_w:
+                # Advance from the ink, not the face's own metric.
+                #
+                # A CJK face reports one advance for every syllable because
+                # they are designed on a square em - NanumGothic says 15.05 for
+                # 가, 이 and 무 alike - yet their ink is 14, 12 and 15 wide. A
+                # font baked from those advances is fixed width in all but
+                # name, and a game that lays text out on that grid cannot close
+                # the gaps.
+                #
+                # Ink plus one pixel of side bearing keeps neighbouring
+                # syllables from touching while letting narrow ones take less
+                # room. The renderer widens any glyph whose ink still reaches
+                # past this, so a wrong guess here cannot cause an overlap.
+                adv = ink_x + ink_w + 1
+            else:
+                adv = int(round(font.getlength(ch))) if ch else cell_w
             adv = max(0, min(255, adv))
             metrics += struct.pack("<BbBB", adv, max(-128, min(127, ink_x)),
                                    min(255, ink_w), 0)
