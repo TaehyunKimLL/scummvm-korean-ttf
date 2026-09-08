@@ -30,7 +30,21 @@
 
 `ALPHA_PALETTE_CASES.md`, `GLYPH_AUDIT.md`, `MI2_VERB_LOSS.md`,
 `FONT_FORMAT.md`, `OUTLINE_REFERENCES.md`, `NEEDED_GAME_DATA.md`,
-`REGRESSION_HARNESS.md`
+`REGRESSION_HARNESS.md`, `TEST_MATRIX.md`, `LOOM_MOUSE_DEBUG.md`,
+`REVIEW_BRIEF.md`
+
+### 작업 보드
+
+진행 중인 작업은 이 폴더가 아니라 Hermes kanban 보드 `scummvm` 에 있습니다:
+
+```bash
+hermes kanban --board scummvm ls
+hermes kanban --board scummvm show <task-id>
+```
+
+`sessions/` 는 보드로 옮기기 전의 파일 보드와 세션 인계 문서의 아카이브입니다.
+`sessions/2026-09-08-HANDOFF.md` 에는 T5(16bpp `_compositeBuf` 오버런)의 측정
+3종이 그대로 남아 있습니다.
 
 ### 옛 문서 — 그대로 따라하면 동작하지 않음
 
