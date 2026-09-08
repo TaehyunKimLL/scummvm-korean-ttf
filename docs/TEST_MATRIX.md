@@ -14,7 +14,7 @@
 | A | LucasFilm 로고 뒤 섬 이미지가 검게 나옴 | MI2 | **해결 `2d290814`** | alpha true-color 팔레트 페이드에서 전체 dirty 필요 |
 | B | 난이도 화면 한글이 그려졌다 지워짐 | MI2 | **해결 `beb6ed43`** | `ignoreCharsetMask` 글자를 clear에서 보존 |
 | C | v2 겹침이 정말 고쳐졌는지 미확정 | Zak | 재현 안 됨 | 대사 있는 장면에서 확인 |
-| D | `scrollEffect` 4방향 배율 미보정 | v5 전반 | **보류** | hi-res 도달 0건. v5 스크롤 전환 나오면 재개 |
+| D | `scrollEffect` 4방향 배율 미보정 | v5 전반 | **확인됨** | 도달 0건이 아니었다 — Indy4 스크립트가 `room 30`→`room 22`로 dir 0을 부른다. 4방향 전부 3x에서 깨짐(대조군 정상). 조사 기록 `docs/B3_SCROLL_EFFECT.md` |
 | E | v7 게임은 hi-res 합성에서 제외 | Full Throttle | 무해 판정 | v7 지원 시 재검토 |
 | F | Windows 실제 화면 미검증 | 전체 | 환경 제약 | GPU 있는 환경 필요 |
 
