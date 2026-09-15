@@ -1,10 +1,10 @@
 # ScummVM hi-res text — what is implemented
 
-Branch `hires-text`, measured at `7b0a8c9899f` against `upstream/master`:
-**91 commits**, 233 files, +17067/−9207. Engine and graphics source alone:
+Branch `hires-text`, measured at `34f18f7945a` against `upstream/master`:
+**94 commits**, 233 files. Engine and graphics source alone:
 175 files, +9354/−8337.
 
-`make test`: **531 tests OK**. Engine builds with 0 errors.
+`make test`: **535 tests OK**. Engine builds with 0 errors.
 
 The goal is an upstream contribution, so everything below is shaped by that:
 no FreeType requirement at runtime, no behaviour change for existing
@@ -208,6 +208,28 @@ the game's own cell.
 
 ## 6. Correctness fixes found along the way
 
+- **FM-Towns blended text lost every pixel the palette collided with**
+  (`ab2e0440019`) — the 8 bit text layer keys transparency on the palette
+  *index*, which is exact. When hi-res text blends, that layer is 16 bit and
+  holds resolved *colours*, so the same test compares colours, and an
+  FM-Towns palette routinely maps a second index to the transparent index's
+  colour. Measured on Japanese MI2: the outline arrives in
+  `_townsCharsetColorMap[0] = 51` → `_textPalette[3]` = (0,0,0), the same
+  black as index 0, and 3500+ pixels per scene were composited and then
+  discarded. `townsOpaqueColor()` moves such a pixel by one unit of the low
+  channel — below a visible difference, never equal to the key. The 8 bit
+  path is untouched, verified by the font ROM drawing an identical 4072
+  outline pixels before and after.
+- **`mode=game` asked a Korean-only field what the game wanted**
+  (`ad376577976`) — `_2byteShadow` is written in four places, all inside
+  `if (_vm->_useMultiFont)`, the Korean multi-font loader. Every other CJK
+  path left it at its initialiser, so `resolveShadow()` returned
+  `kHiResShadowNone` and replacement glyphs were drawn bare. FM-Towns decides
+  its decoration in `CharsetRendererTownsClassic::setupShadowMode()`, which
+  the layer never saw. Now a virtual, `gameShadowMode()`: the base still
+  answers `_2byteShadow` so nothing else changes, and FM-Towns answers from
+  `setupShadowMode()` itself. Third instance of "a field only an optional
+  subsystem writes, read as though always populated".
 - **`drawBits1Kor` row guard** (`9f6f22b95cb`) — the guard bounded the row it
   was *asked for* (`drawTop`, passed unscaled by `printChar`'s last fallback)
   rather than the row the loop *writes* (`y1 + y + offsetY[i]`, already scaled).
@@ -244,6 +266,7 @@ the game's own cell.
 | `test/engines/scumm/trs_bundle.h` | 74 lines — bundle naming by language |
 | `test/engines/scumm/hires_hook_census.h` | the renderer census, as a test |
 | `test/engines/scumm/hires_overlay.h` | index/coverage plane invariants |
+| `test/engines/scumm/hires_towns_key.h` | the FM-Towns 16 bit colour key, exhaustive |
 
 None require FreeType.
 
@@ -251,10 +274,10 @@ None require FreeType.
 
 ## 8. Documentation in-tree
 
-- `engines/scumm/HIRES_TEXT.md` (250 lines) — what it does, config, ordering,
+- `engines/scumm/HIRES_TEXT.md` (278 lines) — what it does, config, ordering,
   glyphs a game drew itself, decorations, metrics, scaling, diagnostics
-- `engines/scumm/HIRES_TEXT_SETUP.md` (425 lines) — the ini, the map, the fonts
-- `engines/scumm/HIRES_TEXT_DECORATIONS.md` (161 lines) — outline/shadow and traps
+- `engines/scumm/HIRES_TEXT_SETUP.md` (479 lines) — the ini, the map, the fonts
+- `engines/scumm/HIRES_TEXT_DECORATIONS.md` (205 lines) — outline/shadow and traps
 - `graphics/hires_text/README.md` (171 lines) — the engine-independent layer
 - `tools/korean/` (39 scripts) — font baking and the capture harness
 
@@ -269,9 +292,15 @@ None require FreeType.
    smallest viable target; Indy 3 Mac needs a second hook inside the Mac GUI's
    text area because its dialogue box bypasses `printCharInternal` entirely.
 3. **Mac scale-3 warning** — currently silent.
-4. **Japanese hi-res rendering is unverified.** The T4 captures prove the
-   `.trs` path and the game's *own* FM-Towns font ROM; no `hrjpn%02d.fnt` set
-   has been baked or captured. The naming convention and the FM-Towns hook are
-   implemented but exercised only in Korean.
-5. **Upstream hygiene** — 91 commits need splitting/ordering for submission,
+4. **Japanese hi-res rendering: verified on MI2 only.** An `hrjpn%02d.fnt`
+   set has been baked (IPA Gothic, 16px cell, CP932, 6879 glyphs) and proved
+   on screen for **Monkey Island 2, FM-Towns, Japanese**, in two scenes
+   (mode-select menu and credits crawl), against the game's own font ROM as
+   the control — the replacement is what draws, not the ROM. It exposed and
+   fixed two real engine defects (§ below). Charsets 2, 6 and 7 are the only
+   ones that fixture selects; fonts 0,1,3,4,5,8,9 load and are never drawn
+   with. **Nothing is claimed for mi1, loom or zak, or for coverage across a
+   playthrough**, and Chinese (`hrchs`/`hrcht`) remains entirely unexercised.
+   The full account, with the numbers, is `harness/T7_JAPANESE_HIRES.md`.
+5. **Upstream hygiene** — 94 commits need splitting/ordering for submission,
    and `ENABLE_SCUMM_7_8` on/off both need a clean build.
