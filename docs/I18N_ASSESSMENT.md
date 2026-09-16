@@ -132,12 +132,13 @@ backends. **[source]**
 `Common::CodePage` (`common/str-enc.h:30-60`) carries 24 values including
 `kWindows949`, `kWindows932`, `kWindows936`, `kWindows950` and `kJohab`, plus
 `convertToU32String` / `convertFromU32String` (`:71-72`) and
-`convertUHCToUCS` (`:73`). **50 of the 146 engines already name a
+`convertUHCToUCS` (`:73`). **50 of ScummVM's 146 engines already name a
 `Common::CodePage`.** **[measured]**
 
-And yet, `harness/i1cover.py` transcribes every hand-rolled double-byte test in
-the tree, checks the transcription against the file, and measures each against
-the real encoding as Python's codecs define it: **[measured]**
+And yet, `harness/i1cover.py` transcribes all **16** hand-rolled double-byte
+tests in the tree (10 Korean, 5 Japanese, 1 Chinese), checks each transcription
+against the file, and measures it against the real encoding as Python's codecs
+define it. The Korean half: **[measured]**
 
 ```
 Korean (CP949): 17048 assigned double-byte code points
