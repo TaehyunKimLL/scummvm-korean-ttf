@@ -103,20 +103,72 @@ and checks: table sorted and unique, file size exactly matches the declared
 layout, no glyph is blank, every width flag agrees with Unicode EAW, and
 sampled glyph bitmaps match a fresh PIL render pixel for pixel.
 
-Against a bundle built from Noto Sans CJK at 16 px:
+Against the Korean bundle with hanja, built from Noto Sans CJK at 16 px:
 
 ```
-version=1 bpp=1 cell=16x16 glyphs=12248
+version=1 bpp=1 cell=16x16 glyphs=17763
 no blank glyphs: OK
 width flags match Unicode EAW: OK
-bitmap re-render: 307 checked, 0 mismatched  OK
+bitmap re-render: 302 checked, 0 mismatched  OK
 RESULT: PASS
 ```
 
-Coverage of that bundle: hangul 11,172/11,172 · symbols 542/546 ·
-full-width 90/94 · punctuation 165/184 · jamo 93/94. Hanja are available via
-`--ranges hanja` but excluded by default — 20,992 glyphs would add ~1.3 MB for
-characters most translations never use.
+The checker duplicates the builder's threshold and ink-box measurement, so
+those two constants are stated in both files and must be changed together;
+a mismatch shows up as bitmap mismatches rather than silently passing.
+
+## Hanja and kanji: derive the set from the code page
+
+`[measured]` The first version of the builder offered hanja only as
+`--ranges hanja` = `U+4E00..U+9FFF`, 20,992 glyphs, excluded by default. That
+was wrong in both directions, and **Japanese does not work without it at all**
+— a language written in kanji cannot render from a hangul-syllable font.
+
+`[measured]` The right set is the game's own code page repertoire, enumerated
+from the codec rather than guessed as a block:
+
+```
+Shift-JIS (cp932)   9,370 code points   kanji  6,682   kana 177
+EUC-KR/UHC (cp949) 17,144 code points   hanja  4,620   kana 169  hangul 11,172
+```
+
+The two hanja sets are different characters, and each is a fraction of the
+20,992-glyph block — so a block range is simultaneously too large and the
+wrong contents. `--ranges sjis` / `uhc` / `gbk` / `big5` build exactly what the
+encoding can express.
+
+Resulting bundles at 16 px, 1 bpp:
+
+```
+Japanese  --ranges sjis                           9,353 glyphs    645 KB
+Korean    --ranges latin,...,uhc                 17,763 glyphs  1,224 KB
+Korean    --ranges latin,...  (no hanja)         12,248 glyphs    846 KB
+```
+
+## Two rasterisation bugs that changed one character into another
+
+`[measured]` **The 1bpp threshold must be ~40, not 128.** At 16 px a CJK face
+draws a thin vertical stroke as faint as **grey 47** — well below the
+midpoint. Thresholding at 128 deleted it. The hanja 王 lost both vertical
+strokes and rendered as three horizontal bars, i.e. as 三: not a degraded
+glyph but a *different character*, on screen, legibly wrong.
+
+`[measured]` **The ink box must be measured by rendering, not from
+`getbbox()`.** For 王 at 16 px `getbbox` reports height 16 while the actual
+raster is **20 rows**, so a bbox-derived fit clipped the bottom stroke. The
+builder now renders each sample into a 3×cell canvas and scans for ink.
+
+`[measured]` **Sample across the whole requested set, not its prefix.** The
+first few hundred code points are Latin, which never exercises the tall CJK
+forms that decide the fit — so the original `codepoints[:400]` probe measured
+the one part of the font that could not reveal the problem.
+
+Fixing all three also improved coverage measurably, because glyphs previously
+rejected as blank now survive: full-width 90→94, punctuation 165→177,
+symbols 542→546.
+
+Coverage of the Korean bundle with hanja: hangul 11,172/11,172 · hanja
+4,620 · symbols 546/546 · full-width 94/94 · punctuation 177/184 · jamo 93/94.
 
 `[measured]` Reader-side unit tests live in `test/engines/sci/translation.h`
 (SCITRS key rules) and are wired into `make test` via `test/module.mk`:
