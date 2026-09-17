@@ -139,11 +139,50 @@ because there the text layer is a separate plane composited on top.
 So `doubleByteMode` is not a CJK quirk at all. It is the consequence of
 folding two hardware planes into one buffer.
 
+### The overlay is hardware, and only some targets have it
+
+`[measured]` This must not become "give every driver an overlay". The plane is
+a **PC-98 / FM-TOWNS hardware feature**; VGA has no equivalent, and SCI's
+driver table already encodes exactly that split:
+
+```
+gfxdriver_intern.h:104   UpscaledGfxDriver      driverBasedTextRendering() -> true
+gfxdriver_intern.h:45,79,145, win256col.cpp:41   everything else -> false
+```
+
+`[measured]` `UpscaledGfxDriver` is the only class that returns true, and the
+three PC-98 drivers are precisely its subclasses:
+
+```
+PC98Gfx16ColorsDriver      final : public UpscaledGfxDriver
+SCI0_PC98Gfx8ColorsDriver  final : public UpscaledGfxDriver
+SCI1_PC98Gfx8ColorsDriver  final : public UpscaledGfxDriver
+```
+
+`[measured]` And `drawTextFontGlyph` is implemented **only** there. Every
+other driver - default, EGA, CGA, Hercules, VGA-grey, Win16/256 - defines it
+as `error("Not implemented")`. A VGA target cannot draw a hires glyph at all,
+which is why a Japanese bundle on a DOS release aborted until `JA_JPN` was
+given the upscaled driver.
+
+So the overlay belongs to `UpscaledGfxDriver` and its subclasses, as a
+faithful model of hardware those targets actually have. On a VGA target the
+question never arises: text is drawn into the same lowres bitmap as
+everything else, by the resource font, exactly as the original DOS
+interpreter did. **Nothing about the plain VGA path should change.**
+
+`[unmeasured]` The consequence for this design is that "which plane does this
+glyph go to" is a **driver** property, already spelled
+`driverBasedTextRendering()`, and the engine should ask the driver rather than
+carry a per-string flag through `GfxText16`.
+
 ### The end state this points at
 
-`[unmeasured]` Give the driver a real text overlay: a second buffer the same
-size as `_scaledBitmap`, written only by `drawTextFontGlyph`, composited over
-the scaled background in `updateScreen`. Then:
+`[unmeasured]` Give `UpscaledGfxDriver` a real text overlay: a second buffer
+the same size as `_scaledBitmap`, written only by `drawTextFontGlyph`,
+composited over the scaled background in `updateScreen`. Drivers that answer
+`driverBasedTextRendering() == false` are untouched and keep their present
+single-buffer path. Then:
 
 - No suppression is needed for any language; `show && !doubleByteMode`
   collapses to `show`, and the flag disappears rather than being carried.
@@ -157,9 +196,73 @@ the scaled background in `updateScreen`. Then:
   see why we should" is answered: because it is what makes every other
   language work without special cases.
 
-`[unmeasured]` Cost: one extra full-screen byte buffer per driver that renders
-hires text, plus a composite step on update. Measure before adopting - the
-composite runs on every screen update, not only on text.
+`[unmeasured]` Cost: one extra full-screen byte buffer for
+`UpscaledGfxDriver`, plus a composite step on update. Measure before adopting -
+the composite runs on every screen update, not only on text. Drivers without
+`driverBasedTextRendering()` pay nothing.
+
+### The awkward case this exposes: a fan patch is not hardware
+
+`[measured]` The driver table gives `KO_KOR` the upscaled driver
+(`init.cpp:20`), and Japanese was added the same way. But a Korean fan patch
+on a DOS release has **no PC-98 hardware behind it** - it borrows a driver
+built to model a machine the game never ran on, purely to get a plane where
+16x16 glyphs fit.
+
+`[measured]` The same now applies to any SCITRS bundle: KQ1 is a DOS SCI01
+game, and it renders Korean and Japanese only because it is handed the
+upscaled driver.
+
+`[unmeasured]` Two readings, and they lead to different designs:
+
+1. **It is legitimate.** Hires text needs a hires plane whatever the reason,
+   and "this target renders hires text" is already what
+   `driverBasedTextRendering()` means. A translation is then simply another
+   producer of hires text, and the table entry should say so rather than
+   naming a language.
+
+2. **It is a workaround.** A translated DOS game should stay on its DOS
+   driver and render translated text at the game's own resolution, with a
+   font sized to the game's own cell - no doubling, no overlay, no
+   suppression. The 16x16 ROM glyphs would then be the wrong asset, and a
+   smaller rasterised face the right one.
+
+`[measured]` Reading 2 is not obviously wrong: KQ1's fonts are 8, 9 and 12
+pixels tall, and the bundle currently forces every Korean or Japanese glyph to
+16, which is why the adapter has to halve every metric it reports.
+
+#### The measurement, taken
+
+`[measured]` A 12x12 bundle was built (`m7mkfont.py --size 12`, 12,268 glyphs)
+and run in KQ1. **12px Korean is legible on screen**: the three menu entries
+read 게임시작 / 크레딧 / 이어서 계속하기.
+
+`[measured]` That contradicts what the raw bitmaps suggested. Compared side by
+side at 12 and 16, complex syllables look merged in the dump - 쌓, 뚫 and 경
+lose distinguishing strokes - yet at display scale the words are still
+readable. **A glyph dump is not a legibility test**; the screen is.
+
+`[measured]` What 16px buys is the final consonant. In the 12px capture the
+받침 of 딧 and 속 run together; at 16px they are separate. Both are readable,
+one is comfortably so.
+
+`[measured]` Hanja settle it independently. The ROM face is 16x16 by
+construction, and a 22-stroke character such as 驚 has 85 set pixels at 16px.
+There is no 12px source for it at all - the FM-TOWNS ROM has exactly one size.
+
+`[unmeasured]` So neither reading wins outright:
+
+- Reading 2 is **viable for hangul-only translations**. A 12px face on the
+  plain DOS driver would remove the upscaled driver, the overlay question and
+  the metric halving in one move.
+- Reading 1 is **required for anything with hanja or kanji**, which includes
+  every Japanese translation and any Korean one using 漢字.
+
+`[unmeasured]` That points at making it a property of the bundle rather than a
+global choice: a bundle declares its cell size, and a target needs the hires
+path only when it loads a bundle that needs it. The remaining question is
+whether one game can mix them - which the FontSet design would answer, since
+faces already carry their own metrics.
 
 `[unmeasured]` This is larger than FontSet and must be measured separately.
 FontSet should therefore **carry** `doubleByteMode` rather than entrench it:
