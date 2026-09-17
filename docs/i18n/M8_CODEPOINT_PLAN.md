@@ -79,16 +79,40 @@ op layer, and not at the font layer.
 
 ## Plan
 
-### Stage 1 — widen the type without changing behaviour
+### Stage 1 — widen the type without changing behaviour — **DONE** `aa41e7c180a`
 
-`[unmeasured]` Change the five `GfxFont` methods from `uint16 chr` to
-`uint32 chr`, and the 8 packing sites to produce the same numeric value in a
-`uint32`. Nothing else changes: the value is still a packed byte pair, every
-existing font still decodes it the same way.
+`[measured]` The five `GfxFont` methods and all four implementations now take
+`uint32`. The value is unchanged - still a packed byte pair, still decoded the
+same way by each font. 39 insertions, 39 deletions, all of them the type.
 
-Close with: build clean, 409/409 tests, and an A/B capture of English KQ1 and
-Korean KQ1 that is **pixel-identical** to the current build. A refactor that
-cannot prove byte-identical rendering is not done.
+`[measured]` **The closing condition had to change, and this matters for every
+later stage.** "Pixel-identical capture" is not achievable with this harness:
+two runs of one unchanged build differ by up to 7,722 pixels, because
+character animation phase varies with wall-clock timing. Screenshot equality
+cannot decide whether a text-path refactor is behaviour-preserving.
+
+`[measured]` What does decide it: the **glyph request sequence**. A probe
+logged every `(character, top, left)` triple passed to
+`GfxFontFromResource::draw` and `GfxFontKorean::draw` over a full play
+session, before and after the change.
+
+```
+Korean via SCITRS : 1076 glyphs, sequence byte-for-byte IDENTICAL
+English           : 1412 before vs 1425 after
+```
+
+`[measured]` The English difference is harness non-determinism, not a
+regression - re-running the *same* post-change build produced 1412,
+alternating with 1425. The Korean sequence is the evidence that counts: it is
+the path that exercises double-byte characters, and it did not move.
+
+`[measured]` Built and tested with `ENABLE_SCI32` on as well, which compiles
+`text32.cpp`'s three packing sites and the SCI32 font paths that the default
+configuration omits. 0 errors, 409/409 tests, both ways. Note that the default
+config in this tree has SCI32 **off**, so SCI32 code is not covered unless
+explicitly enabled - a trap for later stages.
+
+**Use the glyph sequence, not screenshots, as the gate for stages 2-4.**
 
 ### Stage 2 — introduce an explicit representation tag
 
