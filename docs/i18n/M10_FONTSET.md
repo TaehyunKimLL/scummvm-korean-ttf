@@ -91,6 +91,81 @@ rule. That is a real property of drawing on the hires text plane. It should be
 asked of the face that drew - "did this glyph go to the text plane" - rather
 than inferred from the font number, but it stays.
 
+### What `doubleByteMode` is actually standing in for
+
+`[source]` The hardware answer is in text16.cpp's own comment, and it reframes
+the flag entirely:
+
+> the SJIS text is drawn in PC-9801 **text mode** and the **text mode layer is
+> always displayed on top of the graphics layer**, so it can never get
+> corrupted by graphics updates (with an emulator you can see how even the
+> mouse cursor is drawn under the Japanese text). [...] we also need to prevent
+> graphics updates for SJIS lines, since **we don't emulate the PC-9801 text
+> mode layer** to that extent
+
+`[source]` So on real PC-98 hardware Japanese text lives on a **separate
+overlay plane** that graphics writes cannot touch. The original interpreter
+therefore needs no suppression at all. `doubleByteMode` is ScummVM's
+substitute for a layer it does not emulate: it protects the glyphs by skipping
+the blit that would overwrite them.
+
+`[source]` The driver layer already models a piece of this.
+`PC98Gfx16ColorsDriver` carries `kFontStyleTextMode`, used only for PQ2,
+because text-mode print takes its colour from a **system palette outside the
+normal 16 colours** - `remapTextColor()` exists solely to translate that, bug
+included.
+
+`[measured]` This explains why the flag could not simply be dropped for the
+Unicode path: SCVMUNI glyphs go to the hires text plane, which in ScummVM is
+also unprotected, so they need the same substitute. Turning it off made Korean
+text render and then vanish (button-row white pixels 2652 -> 1234).
+
+### Why there is no overlay plane today, in code
+
+`[measured]` `UpscaledGfxDriver::drawTextFontGlyph` writes glyphs **straight
+into `_scaledBitmap`**, the same buffer the background is scaled into:
+
+```c
+byte *scb = _scaledBitmap + hiresDestY * _screenW * _srcPixelSize + ...;
+_renderGlyph(scb, _screenW, src, pitch, hiresW, hiresH, transpColor);
+updateScreen(hiresDestX, hiresDestY, hiresW, hiresH, ...);
+```
+
+`[measured]` and `copyRectToScreen` refills that same buffer from
+`_currentBitmap` on every background update. One buffer, two writers, last
+writer wins - which is exactly the corruption PC-98 hardware cannot suffer,
+because there the text layer is a separate plane composited on top.
+
+So `doubleByteMode` is not a CJK quirk at all. It is the consequence of
+folding two hardware planes into one buffer.
+
+### The end state this points at
+
+`[unmeasured]` Give the driver a real text overlay: a second buffer the same
+size as `_scaledBitmap`, written only by `drawTextFontGlyph`, composited over
+the scaled background in `updateScreen`. Then:
+
+- No suppression is needed for any language; `show && !doubleByteMode`
+  collapses to `show`, and the flag disappears rather than being carried.
+- Background updates stop needing to know that text exists, so the
+  `usesHiresDoubleByteText()` pre-update in paint16.cpp goes away too.
+- `[source]` The PQ2 layout differences the text16.cpp comment describes -
+  the uncentred F1 headline, the copy-protection dialogs - come from ScummVM
+  doing font switching and width measurement that the original interpreter did
+  NOT do, precisely because it had the overlay. With a real overlay those
+  workarounds become removable, and the comment's "could be done, but I don't
+  see why we should" is answered: because it is what makes every other
+  language work without special cases.
+
+`[unmeasured]` Cost: one extra full-screen byte buffer per driver that renders
+hires text, plus a composite step on update. Measure before adopting - the
+composite runs on every screen update, not only on text.
+
+`[unmeasured]` This is larger than FontSet and must be measured separately.
+FontSet should therefore **carry** `doubleByteMode` rather than entrench it:
+no new code should infer it from a font number, so that deleting it later
+touches one place.
+
 ## Prior art in this tree, to build on rather than reinvent
 
 `[source]` Branch `wt/f1-dbcsfont-src` already has commit `94b5143334c`,
