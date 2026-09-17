@@ -114,7 +114,79 @@ explicitly enabled - a trap for later stages.
 
 **Use the glyph sequence, not screenshots, as the gate for stages 2-4.**
 
-### Stage 2 — introduce an explicit representation tag
+### Stages 3+4 — **DONE**, by a different route `d6b38f9f544`
+
+`[measured]` The plan's stage 3 (decode into a code-point array inside
+`GfxText16`) was **abandoned after reading the code**, and this is the most
+important correction in this document.
+
+`[source]` `GetLongest()` returns a **byte count**, and its callers use it to
+index the original string:
+
+```
+text16.cpp:487   int16 charCount = GetLongest(curTextPos, rect.right, fontId);
+text16.cpp:490   Width(curTextLine, 0, charCount, fontId, ...);
+```
+
+So the wrapping contract is byte-based end to end. Rewriting it risks every
+SCI game the engine supports, and buys nothing: the thing that actually needed
+code points was the **glyph lookup**, not the iteration.
+
+`[measured]` What shipped instead: the byte string stays the transport and the
+conversion happens at the font boundary. `GfxFontUnicodeAdapter` takes the
+packed byte pair `GfxText16` already produces, decodes it with the game's code
+page, and delegates to `GfxFontUnicode`. Wrapping arithmetic, byte counts and
+the script-visible representation are untouched - satisfying M4 without
+touching the parser path at all.
+
+`[source]` `isDoubleByte()` answers from the **encoding** (via the fallback
+font), not from glyph coverage: the renderer calls it with a lone lead byte to
+decide whether to fetch a second, before a code point exists.
+
+#### Three defects, each of which first looked like something else
+
+`[measured]` **Glyphs drawn but invisible.** The probe showed `draw()`
+receiving correct code points at correct coordinates while the screen stayed
+blank. Double-byte text does not use `putFontPixel`: `GfxFontKorean` goes
+through `putHangulChar`, which draws at `x << 1, y << 1` onto the **hires text
+plane**. Lowres pixels are composited over by the upscale. Fixed with
+`GfxScreen::putHiresGlyph`.
+
+`[measured]` **Text overflowing its button.**
+`GfxFontKorean::getCharWidth` halves the width below SCI2 (`>> 1`) precisely
+because the glyph lands on the doubled plane. The adapter now matches, for
+width and *both* height accessors - missing `getHeight()` would have doubled
+line spacing.
+
+`[measured]` **An "empty first button" that was not a regression.** The legacy
+font shows the same empty button: the selected entry is covered by its
+highlight. Caught only by running the legacy path as a control before
+believing the diff - the same discipline that caught the wrong `checkKorCode`
+fix earlier.
+
+#### Close
+
+`[measured]` On a pristine English KQ1 with only `sci.trs`, `korean.uni` and
+`korean.fnt` added: a translation entry containing `「 」 Ａ Ｂ ㄱ ㄴ ℃` -
+previously a **completely empty box** - now draws every character as a real
+glyph, confirmed by screenshot and by the probe reporting no fallback for any
+of them. Hanja still falls back, as expected: outside the builder's default
+ranges.
+
+`[measured]` `korean.uni` absent leaves the legacy path unchanged: the Unicode
+font loads in 1 of 4 configurations, only where the bundle exists, and
+missing-glyph warnings are 0 in all four. 409/409 tests pass.
+
+### Stage 2 — no longer needed
+
+`[source]` The `SciChar{value, isCodePoint}` tag existed to stop a packed byte
+pair being mistaken for a code point once both travelled as `uint32`. With the
+conversion confined to the adapter, the two representations never share a
+variable: `GfxText16` holds only packed pairs, `GfxFontUnicode` only code
+points, and the single conversion sits in `toCodePoint()`. A tag would add
+ceremony without removing a real confusion. **Dropped.**
+
+### Stage 2 (original text, superseded)
 
 `[unmeasured]` The problem with stage 1 alone is that a `uint32` holding a
 packed EUC-KR pair and a `uint32` holding U+AC00 are indistinguishable. Add a
