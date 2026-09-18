@@ -235,6 +235,51 @@ done.
 chosen per character by coverage, the value handed to it can become a code
 point without any call site needing to know which encoding it came from.
 
+### Stage 4 done, and the ceiling demonstrated
+
+`[measured]` `readChar()` now decodes as it walks, so every value inside
+`GfxText16` is a code point. The comparisons written against the packed form
+moved with it - `0x9781` became `U+FF20` (fullwidth @, SQ4's line break) and
+`0x4081` became `U+3000` - and the three `curChar > 0xFF` tests became
+`curCharBytes == 2`.
+
+`[measured]` That last one was not cosmetic. As a code point, `U+00FF` and
+below are ordinary characters, so `> 0xFF` would have silently stopped
+advancing two bytes for any double-byte character decoding below `0x100`. The
+byte count answers the question the code was actually asking.
+
+`[measured]` `GfxFontSet` lost its decode step - the other half of the round
+trip. Decoding happens once now, where the bytes are walked. A legacy face
+still indexes by byte pair, so the set re-encodes for those; that is the only
+remaining place needing the game's encoding.
+
+`[measured]` Korean and Japanese render exactly as before: 게임시작,
+「王」ＡＢ ㄱㄴ ℃, 정상이어서 계속하기, and ゲーム開始 / クレジット /
+ゲームを続ける. 409/409 tests.
+
+#### The remaining ceiling, measured rather than argued
+
+`[measured]` The encode step in `lookupText()` is still there, and an
+experiment shows what it costs. A translation entry was edited to `ทท시작` -
+two Thai letters, `U+0E17`, outside both cp949 and cp932 - and a font bundle
+built containing them (12,359 glyphs, `U+0E17` present, verifier PASS).
+
+`[measured]` The button renders **시작**. The two Thai characters are not
+blank boxes and not garbage: they are **gone**. No ERROR, no missing-glyph
+warning - `lookupText()` encodes the translation into cp949 before anything
+else runs, and characters the code page cannot express are dropped there,
+before `GfxText16` or any font is reached.
+
+`[measured]` So the ceiling is the pipeline, not the font. The font could draw
+them; it was never asked.
+
+`[unmeasured]` Removing it means `lookupText()` handing out UTF-8 and
+`GfxText16` walking UTF-8 rather than a code page. The byte-count logic
+already generalises - `readChar()` reports how many bytes it consumed, and
+callers no longer assume that number is 1 or 2 - so the change is confined to
+`readChar()` itself plus the legacy re-encode in `GfxFontSet`. The legacy
+faces are what keep a code page in the picture at all.
+
 ### The end state this points at
 
 `[unmeasured]` Give `UpscaledGfxDriver` a real text overlay: a second buffer
