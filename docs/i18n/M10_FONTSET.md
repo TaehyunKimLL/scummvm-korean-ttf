@@ -176,6 +176,65 @@ glyph go to" is a **driver** property, already spelled
 `driverBasedTextRendering()`, and the engine should ask the driver rather than
 carry a per-string flag through `GfxText16`.
 
+## Single-byte text is NOT unicodified yet
+
+`[measured]` Worth stating plainly, because the uint32 work made it look
+settled. What changed was the font **interface**: `GfxFont::draw`,
+`getCharWidth`, `isDoubleByte` and friends now take `uint32 chr` instead of
+`uint16`. The **values** flowing through them did not change.
+
+`[measured]` `GfxText16` still walks raw bytes in the game's code page:
+
+```c
+uint16 curChar = 0;                                  // text16.cpp:199
+curChar = (*(const byte *)textPtr);
+if (_font->isDoubleByte(curChar))
+    curChar |= (*(const byte *)(textPtr + 1)) << 8;  // :216, :315, :353
+```
+
+Four `uint16 curChar` declarations, three pack sites. So a character reaching a
+font is a **packed byte pair in the game's encoding**, not a code point - and
+note the pair is stored lead-in-low, trail-in-high, reversed from the encoding
+itself.
+
+`[measured]` This forces a round trip that the design should not need.
+`lookupText()` encodes the translation out of UTF-8 into the code page
+(`kernel.cpp:955`), `GfxText16` re-reads it byte by byte, and `GfxFontSet`
+decodes those bytes **back** to a code point (`fontset.cpp:64`) to index the
+Unicode face. UTF-8 -> cp949 -> bytes -> code point.
+
+### What the round trip actually costs
+
+`[measured]` Measured against the real bundles rather than guessed, by
+decoding every translated string in each SCITRS file and testing it survives
+the code page:
+
+```
+kq1_ja.trs   1786 entries   1357 distinct chars   1 cannot round-trip:  喂
+kq1_ko.trs   1786 entries    901 distinct chars   0 cannot round-trip
+```
+
+`[measured]` So today the loss is one character in one bundle - the same 喂
+already known to be missing from the FM-TOWNS ROM. The round trip is not
+currently corrupting text.
+
+`[unmeasured]` But the ceiling is the code page, not the font. Any translation
+needing a character outside cp949/cp932 - Cyrillic in a Korean bundle, a
+character from a different CJK repertoire, or simply an em dash - cannot
+survive `lookupText()`'s encode step no matter how many glyphs the SCVMUNI
+face holds. The Unicode font can draw it; the pipeline throws it away first.
+
+`[unmeasured]` Removing the round trip means carrying code points from
+`lookupText()` to the font, i.e. changing what `curChar` **holds** rather than
+its width, and that touches every byte-walking loop in `GfxText16` -
+line breaking, width measurement, `CodeProcessing`, the parser's edit control.
+It is the Stage 3/4 work the codepoint plan described and it has not been
+done.
+
+`[unmeasured]` FontSet is a prerequisite rather than a detour: once a face is
+chosen per character by coverage, the value handed to it can become a code
+point without any call site needing to know which encoding it came from.
+
 ### The end state this points at
 
 `[unmeasured]` Give `UpscaledGfxDriver` a real text overlay: a second buffer
