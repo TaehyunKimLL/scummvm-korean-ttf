@@ -141,3 +141,41 @@ before an internal code-point representation is safe.
 What SCITRS does buy is that the *file* is encoding-neutral. A future engine
 that stores text as `uint32` code points reads the same bundle as today's
 byte-oriented one; only the decode step at the boundary changes.
+
+
+## Verified against a second game, and a third kind of patch
+
+`[measured]` Laura Bow 1's Korean patch works differently from KQ1's: it
+rewrites the game's own TEXT resources in place rather than shipping a
+Text.MAP/Text.Res overlay. Nothing in the game folder declares a language, so
+ScummVM detects it as DOS/English - and every hangul lead byte then went to
+font.0 and was dropped, 268 `missing glyph` warnings in one boot with the
+screen coming up blank. `SciEngine::getLanguage()` now honours ConfMan's
+language key as a last resort for exactly this case.
+
+`[measured]` Extracting the translation needed an SCI0 TEXT reader
+(`harness/i18n/lb1text.py`). Two traps:
+
+- **169 of the 227 TEXT resources are LZW.** Ignoring the method field in the
+  resource header yields 3,817 strings that fail to decode as cp949, which
+  reads as a corrupt translation and is not. The algorithm is SCI0's, table
+  entry length `(bytes written + 1)`.
+- **The two game versions differ in size** - English ships 320 TEXT resources
+  and 8,831 strings, the patched copy 227 and 6,249 - yet they share 6,248
+  `(resource, index)` keys, and exactly 621 of those differ. All 621 are
+  hangul; there are no mismatches. So the alignment key holds across a
+  version difference.
+
+`[measured]` Those 621 pairs became a SCITRS bundle that reproduces the fan
+patch's screen on an **unmodified English LB1**, with only `sci.trs` and
+`korean.uni` added to the game folder. That is the point of the format
+demonstrated on a game it was not designed against: a resource-replacing
+patch can be re-expressed as two dropped-in files, leaving the game data
+untouched.
+
+`[measured]` A counting mistake worth recording, because the first number was
+reported before it was checked: scanning `resource.001` for EUC-KR byte pairs
+says "3,085 Korean strings". The decoded figure is 621. Compression is not the
+reason - even across only the uncompressed resources the raw scan says 3,017
+against 622 decoded. A sentence contains several hangul runs, so the scan
+counts runs and not strings. Decode before counting.
