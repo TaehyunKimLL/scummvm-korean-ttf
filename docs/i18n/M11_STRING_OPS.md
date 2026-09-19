@@ -166,6 +166,55 @@ written. The only open risk is M11-4 (the renderer walk), which is where
 the earlier experiment blanked the screen; it is gated on glyph-sequence
 identity against the M8 baseline.
 
+### M11-4 — renderer walk: **glyph sequences identical, and the ceiling is gone**
+
+Three commits: `bf206268ec9` (decoder + gate + 7 tests), `f612d7323db`
+(`kStrLen`/`kStrAt`), `dc527920d79` (`lookupText()` stops encoding;
+`GfxText16` walks UTF-8).
+
+`[measured]` Glyph sequence against the M10 stage-3 baseline, comparing
+(code point, top, left) after decoding the baseline's packed cp949/cp932
+pairs:
+
+```
+KQ1 English    273 common   identical   (tails 328 vs 273, timing)
+KQ1 Korean     202 common   identical   (tails 237 vs 202)
+KQ1 Japanese   164 common   identical   (tails 188 vs 164)
+```
+
+`[measured]` The thing this was for. A bundle with `ก😀게임` (Thai ko kai,
+an emoji with no glyph, two hangul) in place of "게임시작", and a font
+with the Thai block merged in:
+
+```
+before (cp949 encode)   'ก' and '😀' both dropped at lookupText():
+                        cp949 renders them as b'??' - two question marks
+after  (UTF-8)          ก drawn; 😀 reported as
+                        "font.4 is missing glyph 128512" and skipped;
+                        게임 drawn
+```
+
+The emoji warning is the correct behaviour - the glyph is absent - and
+it names U+1F600, which is the first time a code point above U+FFFF has
+reached the font layer intact (`81f7f881e78` widened the variables for
+exactly this).
+
+`[measured]` The first attempt blanked every button, again, for a reason
+the plan had not named: `SwitchToFont1001OnKorean` decides
+`doubleByteMode` by matching the cp949 byte pattern, which UTF-8 never
+matches, so the hires plane was not refreshed under the text. The
+decoder now answers that question. Worth recording because it was the
+same symptom as the byte-count bug with a different cause.
+
+`[measured]` Untranslated games: the Korean Laura Bow 1 patch (cp949 in
+the heap, no bundle) renders unchanged - the gate holds. Builds with
+`ENABLE_SCI32` on and off, 0 errors; 420/420 tests.
+
+`[unmeasured]` Kinsoku for UTF-8 Japanese: the PC-98 line-start
+punctuation block is skipped for UTF-8 text, so a translated Japanese
+bundle can start a line with 。or 、. The legacy PC-98 releases are
+untouched. Porting that block to code points is a separate card.
+
 ## Measurements that decide the plan — as planned
 
 These are the things that, if they come out the wrong way, change or kill
