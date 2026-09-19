@@ -77,6 +77,12 @@ real game walks dialogue bytes. So the conversion boundary must sit between
 "what scripts manipulate" and "what the renderer draws" — not at the kernel
 op layer, and not at the font layer.
 
+> **Superseded by `M11_STRING_OPS.md`.** This boundary was built and it
+> works, but it has a ceiling: `lookupText()` encodes to the game's code
+> page, so any character outside cp949/cp932 is dropped before the renderer
+> sees it. M11 moves the boundary into the string ops themselves, gated on
+> the translation being loaded so the SCI0 case above keeps byte semantics.
+
 ## Plan
 
 ### Stage 1 — widen the type without changing behaviour — **DONE** `aa41e7c180a`
