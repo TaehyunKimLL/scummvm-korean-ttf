@@ -86,7 +86,87 @@ Gate it on the translation being loaded. An untranslated game keeps byte
 semantics to the last op — and that is the property upstream will ask to
 see proven, not asserted: **every existing game must behave identically.**
 
-## Measurements that decide the plan — none taken yet
+## Measurements — taken
+
+Probe commit `dc37dcbbbcc`, removed exactly in `d79c82ddf80` (`git diff
+dc37dcbbbcc~1 d79c82ddf80 --stat -- engines/` is empty). Both runs exited 0
+with no assert/abort in the log.
+
+Two sessions:
+
+- **KQ1** (SCI1), `m11save.sh`: title, intro, walk, two saves. 8 frames.
+- **LB1** (SCI0), `lb1play.sh` with the copy-protection RNG pinned: through
+  the fingerprint puzzle into Act I, one parser command (`look`). 6 frames.
+
+"Translated" means the string held a byte >= 0x80 — an English game never
+does in text, so this is content-based, not address-based.
+
+### M11-1 — arithmetic on kStrLen/kStrAt results: **no translated string reached either op**
+
+```
+                    KQ1 (SCI1)          LB1 (SCI0)
+kStrLen calls       2  translated 0     0  translated 0
+kStrAt  calls       0  translated 0     0  translated 0
+arithmetic sinks    0                   0
+STALEREJECT         0                   0
+```
+
+`[measured]` The probe printed its own coverage line - "no translated
+string reached kStrLen/kStrAt - this run proves nothing" - and that is the
+finding: **in these two shipped Sierra games, scripts do not index or
+measure dialogue text at all.** The 6,906 `kStrAt` reads M4 counted were
+in *Cascade Quest*, a 2004 fan game with a hand-written glossary scan
+(`M4_TAINT.md` §"Generalisation, precisely"). `[source]` ScummVM's own
+workaround table has exactly one `kStrAt` entry across the SCI corpus,
+and it is Dr. Brain puzzle logic, not dialogue.
+
+What this licenses: code-point semantics for `kStrLen`/`kStrAt` behind the
+translation gate **cannot change the behaviour of these games**, because
+the ops never see translated text. The gate is still right - a fan game
+that does scan bytes exists - but for shipped titles the risk is nil.
+
+What it does not license: a claim about every SCI game. Two titles, two
+short sessions. `[unmeasured]` for every other game.
+
+### M11-2 — buffer fit: **thousands of bytes of headroom, 1.4x fits everywhere**
+
+```
+                    KQ1                 LB1
+kFormat translated  2  overflow 0       2  overflow 0
+kStrCpy translated  0                   1  overflow 0
+tightest fit        kFormat 8128/43     kStrCpy 8028/8
+would overflow at 1.4x     0                   0
+```
+
+`[measured]` The "script buffer" `kFormat` and `kStrCpy` write into is
+the dereferenced segment's `maxSize`, and on these games it is the whole
+remaining heap segment - ~8 KB - not a declared `[buf 40]`. UTF-8's +40 %
+is noise against that. The concern in the plan was reasonable and is
+answered: no.
+
+### M11-3 — `%-Ns` width formats on translated arguments: **one, and it is a number**
+
+`[measured]` Grepped both bundles' **source** strings (the format string
+is the game's) for `%-N` / `%N` width specifiers:
+
+```
+KQ1   29 strings with %, 27 with %s, 1 with a width:
+      " Score: %d of %d%13s%s%1s"
+LB1   27 strings with %, 26 with %s, 0 with a width
+```
+
+The one width is `%13s` on the KQ1 score line, padding a *number* the
+script formats as a string. No translated text is ever the argument of a
+width format. Out of scope.
+
+### Decision
+
+All three measurements clear. Steps 3-6 of the sequence proceed as
+written. The only open risk is M11-4 (the renderer walk), which is where
+the earlier experiment blanked the screen; it is gated on glyph-sequence
+identity against the M8 baseline.
+
+## Measurements that decide the plan — as planned
 
 These are the things that, if they come out the wrong way, change or kill
 the plan. Each names what it would take to refute the approach.
