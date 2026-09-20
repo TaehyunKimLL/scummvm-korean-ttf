@@ -28,6 +28,48 @@ The goal is a translation format and a font format that are
 point — and an engine path where the language is a property of the data,
 not a branch in the renderer.
 
+## Where this sits among the ways SCI text has been localised
+
+Six shapes exist in the wild. `[source]` for all: `detection_tables.h`
+(language counts), `state.cpp:223` (splitter), `text_overlay.h:32`
+(overlay), `graphics/sjis.cpp` (ROM fonts).
+
+```
+                          text lives in        encoding   font from            language known by
+A  Sierra Latin          the resources        cp437      the game's font.NNN  MD5
+   (53 DE, 42 FR, 28 ES, 16 IT, 2 PT)
+   multilingual variant  same, after %G/%F..  cp437      the game's font.NNN  printLang selector
+B  Sierra Japanese       same, after %J       Shift-JIS  hardware ROM;        MD5 + printLang
+   (12: PC-98, FM-Towns)                                 ScummVM ships SJIS.FNT
+C  Russian fan (21)      resources rewritten  cp866      resources rewritten  MD5 + Translate.RU
+D  Korean fan, overlay   Text.MAP/Text.Res    cp949      korean.fnt           the overlay's presence
+   (KQ1, KQ5, SQ1, ...)  beside the game
+E  Korean fan, in-place  resources rewritten  cp949      korean.fnt           MD5 (added here)
+   (LB1)
+F  this branch           sci.trs beside       UTF-8      *.uni beside         the bundle's header
+                         the game                        the game
+```
+
+Two structural facts fall out of the table:
+
+**A and C need no engine knowledge of the language.** A single-byte code
+page plus the game's own font is renderer-neutral: the bytes index the
+glyphs directly. That is why 21 Russian translations landed upstream with
+detection entries and nothing else.
+
+**B, D and E do.** A double-byte code page plus a font the game did not
+ship means `getLanguage()` chooses a rendering path — which font id to
+switch to, whether to set `doubleByteMode`, whether the hires plane needs
+refreshing. Every `== KO_KOR` / `== JA_JPN` this branch removed came from
+that necessity, and `SwitchToFont900OnSjis` (B) is where the "font id
+means a language" pattern began.
+
+F is in the second family but replaces the language gate with a **data
+gate**: `heapStringsAreUtf8()` is "a bundle is loaded", not "the game is
+Korean". The renderer asks what the bytes are, not where the game is
+from. D is F's direct ancestor — same overlay-beside-the-game shape,
+generalised from one code page and one font to any code point.
+
 ## The design in one picture
 
 ```
@@ -202,6 +244,54 @@ addresses assuming bytes; savegames serialise them. `uint32` cells would
 move every address a script has compiled in. That door is closed and the
 document says so.
 
+### Why UTF-8 and not UTF-16, given 16-bit heap cells
+
+The cell is 16 bits, so a UTF-16 code unit looks like a natural fit. It
+is not, for four reasons, each `[source]` unless marked:
+
+```
+                        UTF-8                UTF-16
+cell alignment          none needed          required; [measured] 51 % of
+                                             KQ1's 1,786 strings start at
+                                             an odd byte (SegmentRef::skipByte)
+NUL safety              yes                  no - 'A' is 41 00, and the
+                                             byte-wise strlen stops there
+raw vs reg_t paths      one                  two - script-resource strings
+                                             are byte[], not cells
+variable length         1..4 bytes           1..2 units (surrogates), so
+                                             kStrAt decodes either way
+kStrLen/Cpy/Cat         unchanged            rewritten per storage kind
+```
+
+`seg_manager.cpp:608` refuses a cell-wise read of an odd-aligned pointer
+outright (`Unaligned pointer read … return nullptr`). UTF-16 wins no row.
+UTF-8 assumes nothing about the heap, which is the property that let it
+go in behind a gate with every untranslated game byte-identical.
+
+### Why not a string table outside the heap
+
+SCI32 does exactly this: `SciArray` (`segment.h:409`, `kArrayTypeString`)
+holds string bodies engine-side and the heap carries handles, created and
+manipulated through the `kString` kernel call. It is the right shape for
+SCI32 and the natural place to carry UTF-8 there.
+
+SCI16 cannot, because Sierra did not build it that way. `[source]`
+Strings live inside the script resource, in the same buffer as the
+bytecode (`SCI_OBJ_STRINGS`), and scripts obtain their address by an
+*opcode* — `lofsa` loads a constant offset into the script segment
+(`vm.cpp:1197`) — not by a kernel call the engine could intercept.
+Scripts then do arithmetic on that pointer: `reg_t::operator+` on a
+`SEG_TYPE_SCRIPT` pointer returns `offset + n` (`vm_types.cpp:81`), and
+`str + 5` means "the sixth byte". A handle plus five means nothing.
+Moving SCI16 strings out of the heap would change what `lofsa` and
+pointer addition mean for every SCI16 game.
+
+What this branch does instead has the same effect for the case that
+matters. `[measured]` (M11) Scripts never touch translated text through
+any string op; they carry the *original* English pointer, arithmetic and
+all, and `lookupText()` consults the engine-side table (`sci.trs`) at the
+moment of display. The heap is a conduit the script does not read.
+
 ## Invariants — what may not be traded away
 
 Stated so a proposal that is clean and wrong can be recognised.
@@ -229,7 +319,10 @@ Stated so a proposal that is clean and wrong can be recognised.
   3-byte one in place would move every byte after it. Writes keep byte
   semantics and warn. `[measured]` No shipped game does this.
 - **SCI32.** `text32.cpp` has its own text path. It builds; it is not
-  ported.
+  ported. When it is, the shape differs: SCI32 strings are `SciArray`
+  objects reached through `kString`, so UTF-8 belongs in
+  `kArrayTypeString` and the code-point semantics go into the `kString`
+  sub-ops (substring, insert, ...), not into a heap walk.
 - **The parser.** `kSaid` matches word ids from the vocabulary, never
   string bytes. Translated *input* is a separate problem
   (`scummvm-llm-text-parser`).
