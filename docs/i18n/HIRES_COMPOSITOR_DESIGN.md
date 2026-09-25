@@ -338,8 +338,11 @@ box's `SDL_VIDEODRIVER=dummy` OpenGL can't get a context, so ScummVM
 falls back to `SurfaceSDL`, whose presentation surface/texture is
 unconditionally `SDL_PIXELFORMAT_RGB565` (unmodified upstream code) and
 which therefore never offers a 32bpp format to fall through to. This is a
-capture-environment ceiling, not a code defect - the 32-bit code path is
-exercised and correct wherever a 32bpp format is actually available.
+capture-environment ceiling, not a code defect.
+
+`[unmeasured]` The 32-bit output path. No 32bpp capture has run: every
+screen capture above is RGB565. Only the unit tests cover it
+(`test/engines/sci/textcompose.h`, ARGB golden values for the blend).
 
 `[measured]` 8bpp coverage reaches the screen. KQ1 intro `intro_f45`,
 Korean, two font variants over the same base (`dist-ef8dc87f/kq1-ko`)
@@ -363,6 +366,56 @@ a 1bpp mask. 71 colours is the ink/fill pair plus a spread of
 intermediate blends at every glyph edge, visible in the enlarged crop PNGs
 as soft anti-aliased strokes rather than a hard 1bpp stair-step - this is
 8-bit coverage compositing correctly, not a fluke of one frame.
+
+#### Final-review measurements (engine `89de6486dd`)
+
+`[measured]` `./configure --disable-engine=sci32 --disable-freetype2`
+builds clean.
+
+`[measured]` CLUT8 output (`rgb_rendering=false`): on the title screen,
+`_out.bin` equals the text layer's `fgIndex` on 1023/1023 covered pixels -
+the >= 50% stamp writes exactly the layer's colour.
+
+`[measured]` The slack residue the old re-apply plane needed a one-cell
+margin for is gone: the Task 6 layer dump has no coverage at hi-res rows
+104..106.
+
+#### Final-review fixes (engine `22247361c7`..`2ea1869dc0`)
+
+- F1 `[unit-tested]` An invert (menu title and dropdown highlight, button
+  hilite, edit-control cursor) recolours hi-res text instead of erasing
+  it: fillRect's invert swaps the pen/back indices in the layer, the SCI0
+  XOR invert XORs them with 0x0f; the two invert loops write the visual
+  pixel without clearing the layer. No KQ1-ko scenario inverts over
+  hi-res text (its buttons, menu bar and dropdowns are English), so the
+  unit tests carry it.
+- F2 An upscaled driver accepts the text layer only when it scales exactly
+  2x on both axes to a screen of the layer's size; Win256's 640x440
+  (11/5 vertical) and 320x240 geometries refuse it instead of reading
+  past the layer and aborting. The composite loop is also clipped to the
+  layer.
+- F3 Only the KO/JA `UpscaledGfx` instance asks for a 32-bit screen;
+  Win256 and PC-98 keep the backend's default format, so an untranslated
+  game's output format is unchanged.
+- F4 `refreshHiresRect()` carries the palette mods and palette-mod map
+  again, as the old `drawTextFontGlyph()` path did.
+- F5 Every draw into the visual plane clears the text over it:
+  `vectorPutPixel()`'s direct path (picture lines, fills, patterns),
+  `putFontPixel()`'s non-upscaled and 640x400 branches and `dither()`
+  now do what `putPixel()` does. `bitsRestore*()` still restores, and the
+  Mac 480x300 writers are left alone (no driver composites there).
+- F6 A movie frame removes the text inside its rect, as the original's
+  frame blit into the framebuffer did; text outside the frame stays.
+- F7 A driver that does not composite the layer (a non-upscaled driver,
+  or an upscaled one that refused under F2) now logs one warning naming
+  platform, render mode and display, the §4 quiet fallback plus a log
+  line.
+
+`[measured]` After the fixes: `make test` 438/438; KQ1 intro, Korean,
+0 px on all 4 frames; KQ1 tour, Korean, 0 px on the 5 comparable frames
+(one earlier run differed by 428-1288 px in a non-text scene region of the
+driver's own scaled bitmap, outside any layer coverage, and did not
+reproduce); English intro byte-identical on every `.bin`, no `_layer.bin`.
 
 ## 6. Build order
 
