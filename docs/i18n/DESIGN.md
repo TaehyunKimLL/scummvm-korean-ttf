@@ -6,6 +6,8 @@ files. The M-series documents (`M1` … `M11`) record how each decision was
 reached and what was measured; this one records what the result *is*, so
 that a reader can judge the design without replaying the history.
 
+Revised 2026-09-26 for `550acf025b` (the UTF-8 flag); see §"Open".
+
 The previous revision of this document described `dc527920d79`, when
 translations came from a text-keyed bundle (`sci.trs`). That bundle was
 retired in `93cfc53ff8`; §"What SCITRS was, and why it went" says why.
@@ -76,7 +78,7 @@ F is in the second family. At `dc527920d79` it replaced the language gate
 with a data gate ("a bundle is loaded"). Since `93cfc53ff8` its text arrives
 the way C's and E's does — as patch files the resource manager has always
 loaded — and the engine learns the text is UTF-8 from the detection entry,
-which names a language. F is now E's shape with UTF-8 in place of cp949,
+which carries `ADGF_UTF8I18N` (`550acf025b`). F is now E's shape with UTF-8 in place of cp949,
 plus one side table for the strings a patch cannot reach.
 
 ## The design in one picture
@@ -117,8 +119,8 @@ Three properties fall out of this shape:
    disappears when those faces do.
 3. **Two gates.** `usesHiresDoubleByteText()` (how glyphs reach the screen)
    and `heapStringsAreUtf8()` (what a heap byte means). An untranslated game
-   never enters the new path. Both are currently spelled in terms of
-   `KO_KOR`; see §"Open".
+   never enters the new path. The second reads the detection entry's
+   `ADGF_UTF8I18N` flag; the first still tests `KO_KOR`, see §"Open".
 
 ## The data
 
@@ -186,7 +188,8 @@ for the Russian LB1 and the Korean KQ6: an MD5 entry in
   the English entry lists plus `text.000`, so the detector — which picks the
   entry matching the most files — prefers it exactly when the patch is
   present. `[measured]` The same volumes detect as Korean with the patch and
-  English without it.
+  English without it. The entry carries `ADGF_UTF8I18N`: the language alone
+  does not say the text is UTF-8 (`550acf025b`).
 
 `getLanguage()` consults, in order: the legacy Korean overlay
 (`Text.MAP` present → `KO_KOR`), `ConfMan["language"]`, then detection
@@ -393,8 +396,8 @@ row: 2242 black pixels at frame 1, 1352 at frame 60, the words vanishing
 syllable by syllable along the actor's dirty rect.
 
 `GfxScreen` now keeps a hires **text plane**: written by every glyph the
-SCVMUNI and legacy Korean faces draw (not yet the legacy SJIS face — its
-PC-98 drivers align glyphs themselves), re-applied after every lowres blit
+SCVMUNI and legacy Korean faces draw (not the legacy SJIS face; see
+`PC98_TOWNS_TEXT.md`), re-applied after every lowres blit
 in `displayRect()`, cleared when
 the window that drew it is disposed, when a new picture replaces the
 screen, and on restore (`c7106971bd`). `[measured]` 2242 → 2318 over the
@@ -428,9 +431,9 @@ Stated so a proposal that is clean and wrong can be recognised.
 - **Builds without FreeType, and with `ENABLE_SCI32` both ways.**
   `[measured]` Every commit on the branch up to `dc527920d79`;
   `[unmeasured]` since.
-- **`make test` passes.** 420 at `93cfc53ff8` (per its message); 17 of those
-  are this work: 10 for the script-string table
-  (`test/engines/sci/translation.h`), 7 for the decoder
+- **`make test` passes.** 421 at `550acf025b` `[measured]` (SCI only, null
+  backend); 18 of those are this work: 10 for the script-string table
+  (`test/engines/sci/translation.h`), 8 for the decoder
   (`test/engines/sci/utf8.h`).
 
 ## What is deliberately not done
@@ -456,32 +459,40 @@ Stated so a proposal that is clean and wrong can be recognised.
 
 ## Open
 
-### The gates name Korean again
+### The gates: one fixed, one still names the language
 
-`[source]` Since `93cfc53ff8`:
+**`heapStringsAreUtf8()` — fixed in `550acf025b`.** After `93cfc53ff8` it
+was `getLanguage() == KO_KOR && no Text.MAP overlay`. That is true for
+every Korean entry, and every Korean entry upstream (KQ5, KQ6, EcoQuest,
+Castle of Dr. Brain) is cp949, as is the in-place LB1 patch. cp949 walked as
+UTF-8 is not harmless. 217 hangul syllables are well-formed 2-byte UTF-8
+and decode to the wrong character (`'징'` = C2 A1 → U+00A1), pinned by
+`test_some_cp949_hangul_is_valid_utf8_so_the_gate_cannot_be_the_language`.
+It now reads `ADGF_UTF8I18N` (bit 0 of the engine's detection flags,
+`detection.h`), set on the UTF-8 entry. The data says what a heap byte is
+again, and the language only chooses `sci-<lang>.str`. `[source]`; no game
+was run (no game data on the machine that made the change); 421/421 tests.
 
-```
-usesHiresDoubleByteText()  = Text.MAP overlay loaded
-                             || getLanguage() == KO_KOR
-                             || (PC-98 && PQ2)                  sci.cpp:1015
-heapStringsAreUtf8()       = getLanguage() == KO_KOR
-                             && !Text.MAP overlay loaded        sci.cpp:1028
-```
+**`usesHiresDoubleByteText()` and the driver choice still key on the
+language.** `[source]` `sci.cpp:1016` tests `KO_KOR`; `drivers/init.cpp:95,
+:102` give `UpscaledGfx` to `KO_KOR` and `JA_JPN`; `getRenderMode()`
+forces the default mode for `KO_KOR` only (`init.cpp:128`), so a Japanese
+UTF-8 game with Hercules or CGA selected gets a driver whose
+`drawTextFontGlyph()` calls `error()`. A UTF-8 translation in any other
+language gets the default driver and cannot draw hires glyphs at all. The
+Japanese and Thai results in §"The string boundary" were taken through the
+bundle and cannot be re-run on the current path. The intended fix is one
+predicate for "this game draws i18n text at 2×", driven by data or a user
+option, replacing the language rows. It is not done.
 
-At `dc527920d79` both were "a bundle is loaded". With the bundle gone
-nothing in the data says "this heap is UTF-8", so the gate fell back to the
-language. The consequence: **a UTF-8 patch in any language other than
-Korean is walked as the game's code page.** A Japanese or Thai `text.NNN`
-set, detected correctly, would reach `readChar()` with
-`heapStringsAreUtf8()` false. The Japanese and Thai results quoted in
-§"The string boundary" were taken through the bundle and cannot be
-reproduced on the current path.
+### PC-98 and FM-Towns (`PC98_TOWNS_TEXT.md`)
 
-The fix wants a data signal again, and the detection entry is the natural
-carrier: a flag on the entry ("this game's TEXT resources are UTF-8") that
-`heapStringsAreUtf8()` reads, instead of inferring it from `KO_KOR`. That is
-what "the language is a property of the data" meant, and a detection flag
-is already how upstream marks per-entry facts. Not done; not measured.
+`[source]` The text plane replays through `drawTextFontGlyph()` in 1-row
+runs, and the SCI1 PC-98 glyph renderer asserts `h == 16`, so a SCVMUNI font
+on an SCI1 PC-98 release should crash on its first restore `[unmeasured]`.
+Our `JA_JPN` → `UpscaledGfx` row also catches FM-Towns releases, which
+upstream sends to `GfxDefault`. The comment claiming Towns rows win first is
+wrong: there are none.
 
 ### Room qualifiers apply to buffered strings only
 
@@ -495,9 +506,10 @@ reaches the screen by a direct pointer.
 ### The SJIS face is outside the text plane
 
 `[source]` `putKanjiChar()` (`screen.cpp:637`) still draws straight to the
-driver, so a Japanese release on `SJIS.FNT` or a ROM font should lose text
-under a passing actor as Korean did before `c7106971bd`. `[unmeasured]`
-Details and why it is not a one-line change: `TEXT_PLANE.md`.
+driver. Of the PC-98 releases only PQ2's original kept text on a separate
+layer (text VRAM), so only there does this lose something the original
+had. Routing it through the plane needs a raw-pixel replay first
+(`PC98_TOWNS_TEXT.md` §5–6).
 
 ### Tooling not in any repository
 

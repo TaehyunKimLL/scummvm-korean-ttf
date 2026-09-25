@@ -107,22 +107,16 @@ that to be visible.
 
 ## Not covered: the legacy SJIS face
 
-`[source]` `GfxScreen::putKanjiChar()` (`screen.cpp:637`), the path for
-`SJIS.FNT` and the PC-98/FM-Towns ROM fonts, still calls
-`drawTextFontGlyph()` directly. Its glyphs never enter the plane, so a
-Japanese release drawn through the legacy face should drain under a passing
-actor the same way Korean did. `[unmeasured]` No Japanese game was run
-against this commit.
+`[source]` `GfxScreen::putKanjiChar()` (`screen.cpp:637`), the path for the
+PC-98 font (`SJIS.FNT` or the PC-98 ROM; not the FM-Towns ROM), still
+calls `drawTextFontGlyph()` directly, and its glyphs never enter the plane.
 
-It is not a one-line switch. The PC-98 drivers align hires glyphs
-themselves (QFG to 4-pixel lowres boundaries, PQ2 to text-mode columns and
-rows; see the comment above `putKanjiChar`), while the plane records at
-`kHiresTextAlignX = 1`. Remembering a kanji glyph at the unaligned position
-would re-apply it a few pixels off from where the driver drew it. Covering
-this face means taking the alignment from the driver, not assuming it.
-
-A Japanese game drawn through a SCVMUNI font set *is* covered, because that
-face goes through `putHiresGlyphPersistent()`.
+Whether they *should* depends on the release, because the originals
+differed. PQ2 PC-98 drew kanji in PC-98 text VRAM, a layer graphics cannot
+touch, and QFG and KQ5/SQ4 PC-98 drew them into graphics VRAM. Routing them
+through the plane as it stands would also break three ways, one of which
+is a crash the SCVMUNI path already has on SCI1 PC-98 releases. All of
+this, with sources: `PC98_TOWNS_TEXT.md`.
 
 ## Invariants
 
