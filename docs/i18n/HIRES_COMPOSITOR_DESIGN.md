@@ -344,9 +344,11 @@ exercised and correct wherever a 32bpp format is actually available.
 `[measured]` 8bpp coverage reaches the screen. KQ1 intro `intro_f45`,
 Korean, two font variants over the same base (`dist-ef8dc87f/kq1-ko`)
 built by `mkvariant.py`: `kq1-ko1` (`korean.uni` rebaked at `--bpp 1`) and
-`kq1-ko8` (`korean.uni` rebaked at `--bpp 8`), both from AppleGothic.ttf
-at size 16 (`m7mkfont.py`; the original TTF used for the shipped font is
-unknown, so this is a controller-ruled substitute, not the shipped font).
+`kq1-ko8` (`korean.uni` rebaked at `--bpp 8`), both from **Apple SD
+Gothic Neo (`AppleSDGothicNeo.ttc` face 0, Regular; macOS system font,
+local testing only)** at size 16 (`m7mkfont.py`; the original TTF used
+for the shipped font is unknown, so this is a controller-chosen
+substitute, not the shipped font).
 Distinct raw RGB565 pixel values inside the second dialogue box's text
 area (hires crop `x∈[60,579) y∈[272,337)`, interior of the box, same
 frame, same crop, both variants):
