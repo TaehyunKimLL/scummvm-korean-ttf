@@ -299,6 +299,69 @@ quietly to today's path.** Never a blank screen. Log each cause once.
 **Baseline first.** Capture the current `_hiresTextPlane` behaviour on
 every scenario above before any code moves, then A/B against it.
 
+### 5.1 Measured (build order step 1, engine `89de6486dd`, harness `424b280`)
+
+`[measured]` KQ1 intro, Korean, vs `runs/baseline-4a0f7f0e1c` (the shipped
+1bpp `korean.uni`): **0 pixels differ on all 4 captured frames**
+(`intro_f1`/`f20`/`f45`/`f60`), Task 5 and Task 6 combined. Task 5 alone
+left 2040 px/frame (the first dialogue box's text surviving its window's
+close, by design - Task 5's brief says not to merge it alone); Task 6's
+underbits-carries-the-layer change brings that to 0.
+
+`[measured]` KQ1 tour, Korean, same baseline: **0 pixels differ on 5 of 6
+dumps** (`01_title`, `02_look`, `02b_inventory`, `02c_ring`,
+`02d_unknown`). The sixth, `03_room2`, differs (716-3176 px depending on
+the run) but the diff has zero overlap with any text-layer-covered pixel
+- cross-checked against `03_room2_layer.bin`, which has 0 covered pixels
+for that capture - and moves with ego's on-screen x position, not with
+any code change. `03_room2` is a stale-baseline artifact: the baseline
+was captured before harness commit `7e96abf` ("kq1_tour: wait for the
+picture to stop before dumping room 2") added a `wait_idle(8)` ahead of
+that dump, so the baseline and the current script settle the walk at
+different real-time instants. Re-baselining would show 0 here too; it is
+not evidence against the compositor.
+
+`[measured]` English: byte-identical to baseline on every `.bin` file,
+0 `_layer.bin` files present - the lowres bitmap font never allocates a
+`TextLayer`, so the English path is provably untouched by this plan.
+
+`[measured]` `make test`: **435/435**, both after Task 5+6 and reconfirmed
+for this task.
+
+`[measured]` Headless macOS capture format is RGB565
+(`_out.txt`: `640 400 2 5 6 5 0 11 5 0 0`), not the 32-bit format §3.5
+describes, even after build-order step "Upscaled drivers ask for a 32-bit
+screen" (`64a775be92`) landed. Cause: on a real display macOS's default
+graphics manager is OpenGL, whose `getSupportedFormats()` offers a 32bpp
+format first and would pick up the new request immediately; under this
+box's `SDL_VIDEODRIVER=dummy` OpenGL can't get a context, so ScummVM
+falls back to `SurfaceSDL`, whose presentation surface/texture is
+unconditionally `SDL_PIXELFORMAT_RGB565` (unmodified upstream code) and
+which therefore never offers a 32bpp format to fall through to. This is a
+capture-environment ceiling, not a code defect - the 32-bit code path is
+exercised and correct wherever a 32bpp format is actually available.
+
+`[measured]` 8bpp coverage reaches the screen. KQ1 intro `intro_f45`,
+Korean, two font variants over the same base (`dist-ef8dc87f/kq1-ko`)
+built by `mkvariant.py`: `kq1-ko1` (`korean.uni` rebaked at `--bpp 1`) and
+`kq1-ko8` (`korean.uni` rebaked at `--bpp 8`), both from AppleGothic.ttf
+at size 16 (`m7mkfont.py`; the original TTF used for the shipped font is
+unknown, so this is a controller-ruled substitute, not the shipped font).
+Distinct raw RGB565 pixel values inside the second dialogue box's text
+area (hires crop `x∈[60,579) y∈[272,337)`, interior of the box, same
+frame, same crop, both variants):
+
+| Variant | bpp | Distinct colours in box |
+|---|---|---|
+| `kq1-ko1` | 1 | 2 |
+| `kq1-ko8` | 8 | 71 |
+
+2 colours is exactly glyph-ink vs box-fill, no antialiasing - expected of
+a 1bpp mask. 71 colours is the ink/fill pair plus a spread of
+intermediate blends at every glyph edge, visible in the enlarged crop PNGs
+as soft anti-aliased strokes rather than a hard 1bpp stair-step - this is
+8-bit coverage compositing correctly, not a fluke of one frame.
+
 ## 6. Build order
 
 Each step lands on `i18n` through its own card worktree (`TREES.md`) and
