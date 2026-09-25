@@ -1,6 +1,16 @@
 # SCITRS — a Unicode fan-translation format for SCI
 
-Status: **implemented and verified**. Writer `harness/i18n/m5mktrs.py`,
+> **Retired in `93cfc53ff8` (2026-09-20). Kept as a record; nothing reads
+> this format any more.** TEXT-resource strings now ship as UTF-8
+> `text.NNN` patch files, which the resource manager has always loaded, and
+> the strings embedded in scripts come from a `sci-<lang>.str` table keyed
+> by `(script, id[, room])` — see `SCRIPT_STRINGS.md`. Why the text-keyed
+> bundle went: `DESIGN.md`, §"What SCITRS was, and why it went".
+> `harness/i18n/m5mktrs.py` still writes `.trs` files; the engine ignores
+> them, and `engines/sci/engine/translation.{h,cpp}` now holds the
+> replacement.
+
+Status at the time of writing: **implemented and verified**. Writer `harness/i18n/m5mktrs.py`,
 reader `engines/sci/engine/translation.{h,cpp}`.
 
 Verified end to end on a pristine English KQ1 (1991 remake): a 1,786 entry
