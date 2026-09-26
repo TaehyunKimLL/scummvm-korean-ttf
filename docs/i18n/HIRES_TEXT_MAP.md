@@ -26,7 +26,16 @@ draws with whatever the ini keys and built-in defaults say.
 It is plain INI syntax (`common/formats/ini-file.h`): `[section]` headers,
 `key=value` lines, `;` comments on their own line. **Inline comments are
 not supported** - `color=0 ; DOS` keeps the `; DOS` as part of the value
-and fails to parse. Put comments on their own line instead.
+and fails to parse. Put comments on their own line instead, above the key
+they describe, as every example on this page does.
+
+**Relative paths in the map are the map's own.** A `[fonts]` entry, or a
+path written in place of a face name (`face=`, `latin_font=`, ...), that
+is not absolute is taken against the directory holding the map file. For
+the game directory's own `hires_text.map` that is the game directory; for
+a map named by `hires_text_map=` elsewhere, fonts can sit beside that map.
+The ini keys `hires_text_font` and `hires_text_latin_font` are not map
+paths: they are used exactly as given, as they always were.
 
 ## A complete, worked example: KQ1-ko
 
@@ -46,20 +55,29 @@ TTFs alongside the map instead):
 
 ```ini
 [hires]
-font=default                 ; the face a [font.N] section names no face of its own
+; the face for a [font.N] section that names no face of its own
+font=default
 
-[fonts]                      ; face name -> file. Relative paths are taken
-default=/System/Library/Fonts/AppleSDGothicNeo.ttc     ; against the game directory.
+; face name -> file. Relative paths are taken against the directory
+; that holds this map file.
+[fonts]
+default=/System/Library/Fonts/AppleSDGothicNeo.ttc
 latin=/System/Library/Fonts/Supplemental/AppleGothic.ttf
 
-[latin]                      ; the default for every font id below, unless overridden
-face=latin                   ; draw the Latin range in the "latin" face, not "default"
+; the default for every font id below, unless overridden
+[latin]
+; draw the Latin range in the "latin" face, not "default"
+face=latin
 
-[font.300]                   ; the dialogue box: most text, so fullwidth reads best
-latin=fullwidth              ; "xyzzy" becomes "ｘｙｚｚｙ", same cell width as before
+; the dialogue box: most text, so fullwidth reads best
+[font.300]
+; "xyzzy" becomes "ｘｙｚｚｙ", same cell width as before
+latin=fullwidth
 
-[font.0]                     ; the status line / menu bar / parser echo: short, narrow font
-latin=half                   ; "0 of 158" draws in AppleGothic at its own narrow width
+; the status line / menu bar / parser echo: short, narrow font
+[font.0]
+; "0 of 158" draws in AppleGothic at its own narrow width
+latin=half
 
 ; font 4 (title/menu) has no [font.N] section here, so it stays off -
 ; its Latin text (none, in KQ1-ko - the title screen is already Korean)
@@ -80,10 +98,12 @@ TrueType face's own advances:
 [latin]
 mode=proportional
 face=latin
-metrics=game                 ; the default for every font id: keep today's layout
+; the default for every font id: keep today's layout
+metrics=game
 
 [font.300]
-metrics=font                 ; the dialogue box alone follows AppleGothic's own widths
+; the dialogue box alone follows AppleGothic's own widths
+metrics=font
 ```
 
 ## Precedence
@@ -112,9 +132,14 @@ override; an ini key is the only thing that can override every font id at
 once.
 
 One legacy shorthand, kept for compatibility with SCUMM maps: `[latin]
-enabled=true` with no `mode=` and no `[font.N] latin=` anywhere means
-"the engine's usual Latin behaviour", which for SCI is `latin=proportional`
-with `metrics=game`. SCUMM's `bitmap=` key also implies `enabled` on
+enabled=true` means "the engine's usual Latin behaviour", which for SCI is
+`latin=proportional` (its metrics follow the usual chain, so `game`
+unless a `metrics=` says otherwise). It is decided per font id, as the
+last step before the default: a font id whose mode is set by the ini key
+`hires_text_latin`, by its own `[font.N] latin=`, or by `[latin] mode=`
+takes that mode; every other font id gets proportional. So one
+`[font.4] latin=off` turns font 4 off and leaves the alias in force for
+the rest. SCUMM's `bitmap=` key also implies `enabled` on
 SCUMM, but SCI has no bitmap Latin path - a map with only `bitmap=` gets
 one warning and no effect (see "Warnings" below).
 
@@ -124,7 +149,7 @@ one warning and no effect (see "Warnings" below).
 |---|---|---|
 | `[hires]` | `font=` (or `face=`) | The face a `[font.N]` that names none falls back to - a `[fonts]` name, or a path |
 | `[hires]` | `size=` | Pixel size, same fallback role |
-| `[fonts]` | *name*`=`*file* | Face name -> file, referenced by `font=`/`face=`/`latin_font=`/`latin_face=` elsewhere. Case-insensitive names; relative paths are taken against the game directory |
+| `[fonts]` | *name*`=`*file* | Face name -> file, referenced by `font=`/`face=`/`latin_font=`/`latin_face=` elsewhere. Case-insensitive names; relative paths are taken against the directory holding the map |
 | `[latin]` | `mode=` | `off` \| `half` \| `fullwidth` \| `proportional` - the default for every font id |
 | `[latin]` | `font=` (or `face=`) | Face for the Latin range; absent means the font's own face draws it |
 | `[latin]` | `space=` | `keep` \| `fullwidth` (fullwidth mode only) |
@@ -244,11 +269,28 @@ blanks the screen or aborts the game.
   the game is out of scope (SCI32, or not a CJK code page). `<why>` is
   `SCI32 games do not support it yet` or `the game's language has no
   hi-res CJK text`.
+- `hires_text_latin is ignored: hires_text_font is not in effect` - also
+  in scope, once per run: one of the ini keys `hires_text_latin`,
+  `hires_text_latin_font`, `hires_text_latin_space` or
+  `hires_text_metrics` (even `hires_text_metrics` alone) is set, and a
+  font id ends up with no live TrueType face (none named by the ini key or
+  the map, or the one named failed to open). When that font id's Latin
+  mode comes from the map rather than from `hires_text_latin`, the
+  `hires_text.map: font <id> has a Latin mode ...` warning below is given
+  for it instead.
 - `hires_text_map: empty path; no map is used` - `hires_text_map=` was
   set to an empty value.
 - `hires_text.map <path>: <error>; ignoring it` - `<error>` is one of
   `does not exist`, `is a directory`, `could not open the file`, or
-  `is not a valid map`.
+  `is not a valid map`. `is not a valid map` follows the INI reader's own
+  warning (`common/formats/ini-file.cpp`), which names the line:
+  `INIFile::loadFromStream: missing ] in line <n>`,
+  `INIFile::loadFromStream: Invalid character '<c>' occurred in section
+  name in line <n>`, `Invalid section name: <name>`,
+  `INIFile::loadFromStream: Key/value pair found outside a section in line
+  <n>` or `Invalid key name: <key>`. A line with no `=` gets `Config file
+  buggy: Junk found in line <n>: '<line>'` and is skipped; it does not
+  reject the map.
 - `hires_text_font: empty path; using the .uni fonts` /
   `hires_text_latin_font: empty path; the main face draws Latin text` -
   the corresponding ini key was set to an empty value.
@@ -295,6 +337,10 @@ SCUMM:
 - `HiResText: [latin] mode '<value>' is not off, half, fullwidth or
   proportional, ignoring`
 - `HiResText: [latin] space '<value>' is not keep or fullwidth, ignoring`
+- `HiResText: invalid legacy enabled '<value>', ignoring` - `[latin]
+  enabled=` is not `true`, `false` or a number.
+- `HiResText: unknown legacy metrics '<value>', ignoring` - `[latin]
+  metrics=` is not `game`, `font`, `ttf` or `bitmap`.
 
 Each of these gives exactly one warning per offending key or section (not
 one per line drawn), and the affected setting falls back to whatever the

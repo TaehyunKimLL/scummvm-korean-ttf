@@ -129,29 +129,47 @@ with a worked KQ1-ko example, precedence, and the exact warning texts, is
 `HIRES_TEXT_MAP.md`):
 
 ```ini
-[hires]                      ; face used by a [font.N] that names none
-font=default                 ; a [fonts] name, or a path ("face=" also works)
-size=16                      ; pixels
+; Comments go on their own line: the INI reader keeps an inline "; ..."
+; as part of the value.
 
-[fonts]                      ; face name -> file; relative paths are taken
-default=NanumGothic.ttf      ; against the game directory
+; face used by a [font.N] that names none
+[hires]
+; a [fonts] name, or a path ("face=" also works)
+font=default
+; pixels
+size=16
+
+; face name -> file; relative paths are taken against the directory
+; holding this map
+[fonts]
+default=NanumGothic.ttf
 latin=/System/Library/Fonts/Supplemental/AppleGothic.ttf
 
-[latin]                      ; defaults for every font id that has no [font.N]
-mode=proportional            ; off | half | fullwidth | proportional
-font=latin                   ; a [fonts] name for the Latin range ("face=" also works)
-space=keep                   ; keep | fullwidth   (fullwidth mode only)
-metrics=game                 ; game | font        (proportional mode only)
+; defaults for every font id; a [font.N] key overrides its own
+[latin]
+; off | half | fullwidth | proportional
+mode=proportional
+; a [fonts] name for the Latin range ("face=" also works)
+font=latin
+; keep | fullwidth   (fullwidth mode only)
+space=keep
+; game | font        (proportional mode only)
+metrics=game
 
-[font.4]                     ; one SCI font id (Task 1: KQ1-ko's dialogue box is 300)
-face=default                 ; "font=" also works
+; one SCI font id (Task 1: KQ1-ko's dialogue box is 300)
+[font.4]
+; "font=" also works
+face=default
 size=16
-latin=proportional           ; overrides [latin] mode for this font id
-latin_font=latin             ; "latin_face=" also works
+; overrides [latin] mode for this font id
+latin=proportional
+; "latin_face=" also works
+latin_font=latin
 latin_space=keep
 metrics=font
 
-[font.0:pc98]                ; platform-qualified: wins over [font.0] on PC-98 only
+; platform-qualified: wins over [font.0] on PC-98 only
+[font.0:pc98]
 latin=fullwidth
 ```
 
@@ -165,14 +183,19 @@ latin=fullwidth
   a map (or no map at all) that says nothing about a font id reproduces
   today's behaviour exactly.
 - **Face names resolve through `[fonts]`.** A name not in the table is
-  treated as a path; a relative path is taken against the game directory.
-  Ini paths (`hires_text_font`, `hires_text_latin_font`) are used exactly
-  as given, unchanged from before the map existed.
+  treated as a path. A relative path from the map (a `[fonts]` entry or a
+  path written as a face) is taken against the directory holding the map
+  file: the game directory for its own `hires_text.map`, the map's
+  directory for one named by `hires_text_map=` elsewhere. Ini paths
+  (`hires_text_font`, `hires_text_latin_font`) are used exactly as given,
+  unchanged from before the map existed.
 - **`enabled=true` is a legacy alias**, kept for SCUMM-map compatibility:
-  with no `mode=` or `[font.N] latin=` set anywhere, it means
-  "the engine's current Latin behaviour" - for SCI that is
-  `latin=proportional` with `metrics=game` (SCUMM's own meaning is
-  unchanged). SCUMM's `bitmap=` also implies `enabled` for SCUMM, but SCI
+  it means "the engine's current Latin behaviour" - for SCI that is
+  `latin=proportional`, with metrics from the usual chain (`game` by
+  default; SCUMM's own meaning is unchanged). It is decided per font id,
+  as the last step before the default: a font id whose mode is set by
+  `hires_text_latin`, its own `[font.N] latin=` or `[latin] mode=` keeps
+  that mode, and every other font id gets proportional. SCUMM's `bitmap=` also implies `enabled` for SCUMM, but SCI
   has no bitmap Latin path: a map that sets only `bitmap=` gets one
   warning (`hires_text.map: [latin] bitmap= is SCUMM-only, ignored`) and
   no effect.
