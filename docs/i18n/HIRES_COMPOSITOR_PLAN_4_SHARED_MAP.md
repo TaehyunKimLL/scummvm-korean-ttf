@@ -87,7 +87,6 @@
   Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01HaZ452x9dK6wjToh3cZ3Cf
   ```
-- Every subagent posts a start and an end comment on kanban card t_b9e705c3 (board scummvm), format in the card's Protocol comment.
 - **No SCUMM game data exists on this Mac.** `gamedata/` holds SCI games only, and hpz2 is not reachable over ssh from here. Runtime SCUMM checks are Task 5: **optional, and run by the user**. Tasks 1–4 must not depend on them.
 
 ## Map syntax added by this plan
