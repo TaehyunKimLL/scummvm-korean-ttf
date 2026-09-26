@@ -657,6 +657,56 @@ letter-spaced with a narrow face in a wide game cell; metrics=font can
 look cramped with a very narrow face): see "Known limits" in
 `HIRES_TEXT_MAP.md`.
 
+### 5.4 The 32-bit hardware screen (C10, SurfaceSDL renderer path)
+
+The §5.1 capture ceiling ("Headless macOS capture format is RGB565") is
+lifted by C10 (branch `wt/c10-argb-screen`, commit `1343f41559`). SurfaceSDL's
+SDL2/SDL3 renderer path used to create its screen texture and hardware
+surface as RGB565 unconditionally, and once that surface existed
+`getSupportedFormats()` hid every 4-byte format. So SCI's upscaled drivers
+fell back to `front()` = RGB565, and SCUMM's `hires_text_alpha` fell back to
+CLUT8 ("no 32bpp screen available ... will not be blended").
+
+- The hardware screen is **XRGB8888** (SDL2 `RGB888` / SDL3 `XRGB8888`,
+  `PixelFormat(4, 8,8,8,0, 16,8,0,0)`) when the game's format is 4 bytes
+  per pixel, and RGB565 otherwise. It is chosen again at every mode set, so
+  the launcher goes back to 565. XRGB rather than ARGB: it has the same
+  layout (the software renderer's and window surfaces' native one) but no
+  alpha, so the texture is not blended and the overlay/OSD keep 565's
+  no-alpha semantics.
+- **ini key `hw_screen_32bpp=true`** (game domain or `[scummvm]`) forces the
+  32-bit screen for any game. Paletted and 16-bit games then look the same
+  except for colour precision. Palette colours are no longer rounded to 5/6/5
+  bits, so about half the pixels of a VGA game differ by at most 7 per
+  channel. Rounding the 32-bit frame to 565 gives back the 16-bit frame
+  exactly. Aspect correction's *interpolated* stretch is 565/555 only and is
+  nearest on a 32-bit screen (`graphics/scaler/aspect.cpp`).
+- While the screen is 16-bit, the 4-byte formats are listed *after* every
+  16-bit one (XRGB8888 first). So `front()` and the backend-ordered
+  `initGraphics(list)` negotiation do not change, and an engine that looks
+  for a 4-byte format gets the 32-bit screen. After that, XRGB8888 is
+  `front()` and is used without conversion.
+- Every scaler in `graphics/scaler/` already handles 32 bpp (the OpenGL
+  backend uses them on 32-bit textures), so none needs a fallback. The scaler
+  instance is recreated when the hardware format changes.
+
+`[measured]` (headless, dummy driver, sdl2-compat over SDL3 3.4.14; also the
+SDL3-native build `--prefer-sdl3`):
+
+| Case | Before (565 / CLUT8) | After (XRGB8888) |
+|---|---|---|
+| KQ1-ko intro `intro_f45`, map dir `gamedata/c4-perfont` (AppleSDGothicNeo), `rgb_rendering=true`: distinct colours in `_out.bin` crop `x∈[60,579) y∈[272,337)` | 71 (RGB565) | **254** |
+| Same, dummy-driver BMP vs `_out.bin` (`aspect_ratio=false`) | equal only after 565 quantisation | **identical, full 640x400 frame** |
+| MI1 UTE `--boot-param=117`, `runs/c6-maps/mi1ute` + `hires_text_alpha=true`: distinct colours in the verb area crop | 3 (CLUT8, "not blended") | **151**, log `SCUMM: hi-res text blending into RGB888@4` |
+
+Frames with no 32-bit request and no key are unchanged: KQ1-EN intro dumps
+are byte-identical, and the presented BMP of the dump frame has the same
+hash. MI1 UTE with hi-res off gives the same frames as the base build (the
+only differences are the same timing noise the base build shows against
+itself). 5 Days A Stranger is IDENTICAL-PREFIX; AGS asks for a 32-bit
+display even for this 16-bit game, so it now gets the 32-bit screen, and
+its 565-exact colours come out the same.
+
 ## 6. Build order
 
 Each step lands on `i18n` through its own card worktree (`TREES.md`) and
