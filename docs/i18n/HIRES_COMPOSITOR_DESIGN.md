@@ -674,18 +674,38 @@ CLUT8 ("no 32bpp screen available ... will not be blended").
   layout (the software renderer's and window surfaces' native one) but no
   alpha, so the texture is not blended and the overlay/OSD keep 565's
   no-alpha semantics.
-- **ini key `hw_screen_32bpp=true`** (game domain or `[scummvm]`) forces the
+- **ini key `hw_screen_32bpp=true`** (game domain or `[scummvm]`; user-facing
+  entry in `HIRES_TEXT_MAP.md`, "Display key") forces the
   32-bit screen for any game. Paletted and 16-bit games then look the same
   except for colour precision. Palette colours are no longer rounded to 5/6/5
   bits, so about half the pixels of a VGA game differ by at most 7 per
   channel. Rounding the 32-bit frame to 565 gives back the 16-bit frame
-  exactly. Aspect correction's *interpolated* stretch is 565/555 only and is
-  nearest on a 32-bit screen (`graphics/scaler/aspect.cpp`).
+  exactly.
 - While the screen is 16-bit, the 4-byte formats are listed *after* every
   16-bit one (XRGB8888 first). So `front()` and the backend-ordered
   `initGraphics(list)` negotiation do not change, and an engine that looks
   for a 4-byte format gets the 32-bit screen. After that, XRGB8888 is
   `front()` and is used without conversion.
+- **Every engine that scans `getSupportedFormats()` for a 4-byte format now
+  finds one on SurfaceSDL and gets the 32-bit screen**, not only the
+  Korean/hi-res paths. mTropolis picks its 32-bit colour mode (where the
+  title prefers or enhances to 32-bit) instead of
+  16-bit. AGS 32-bit games render straight into ARGB8888 instead of being
+  converted to 565, and AGS 16-bit games get it too, because AGS sets a
+  32-bit display for them. Crab and Alcachofa (which filter the list for
+  32-bit) and SCI video decoders are affected the same way. Engines that take
+  `front()` (Director) or offer a 16-bit-first list (SCUMM FM-Towns,
+  Trecision) keep what they had. What that means: more colour precision and
+  4 bytes/pixel instead of 2 through the scaler and texture upload. Measured
+  on the software renderer, the 32-bit screen was *faster* (the window
+  surface is XRGB8888, so a 565 texture costs a conversion every present).
+  On a GPU renderer with a native 565 texture it may cost a little more
+  (`[unmeasured]`). The OpenGL graphics mode already worked this way;
+  SurfaceSDL now does the same.
+- The 200->240 aspect stretch interpolates on the 32-bit screen too
+  (`graphics/scaler/aspect.cpp`, same 7:1 / 5:3 weights as the 16-bit path;
+  commit `7f03abbb1e`). Before that fix, `aspect_ratio` + `filtering` on a
+  32-bit screen fell back to nearest-neighbour.
 - Every scaler in `graphics/scaler/` already handles 32 bpp (the OpenGL
   backend uses them on 32-bit textures), so none needs a fallback. The scaler
   instance is recreated when the hardware format changes.

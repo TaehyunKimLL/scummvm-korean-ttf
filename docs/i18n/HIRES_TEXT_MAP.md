@@ -260,6 +260,23 @@ These are meant for a player overriding a translation's choices (or for
 testing), not for the translation itself - a map is the only way to give
 different font ids different settings.
 
+#### Display key: `hw_screen_32bpp`
+
+| ini key | Effect |
+|---|---|
+| `hw_screen_32bpp` | `true`: ScummVM's *SDL Surface* graphics mode (`--gfx-mode=surfacesdl`, SDL2 or SDL3) presents through a 32-bit screen for every game, instead of a 16-bit RGB565 one. Default `false` |
+
+This key is not a map override and is not SCI-specific. It belongs to the
+display backend and can go in a game's section or in `[scummvm]`. You
+usually do not need it. A game that asks for 32-bit colour already gets the
+32-bit screen. That includes Korean/Japanese SCI with `rgb_rendering`, SCUMM
+with `hires_text_alpha` and 32-bit AGS games. Set it when a 16-bit or
+paletted game should skip the 5/6/5-bit rounding, e.g. for colour-exact
+screenshots or frame dumps. Its visible effect is small: palette colours
+are up to 7/255 per channel more accurate. The OpenGL graphics mode (the
+default on most desktops) is always 32-bit and ignores the key. Details:
+`HIRES_COMPOSITOR_DESIGN.md` §5.4.
+
 ## Modes, with pictures
 
 All five captures below are the same KQ1-ko dialogue box and status line
