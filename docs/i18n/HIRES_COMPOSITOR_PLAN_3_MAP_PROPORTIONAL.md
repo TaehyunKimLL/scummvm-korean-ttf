@@ -9,11 +9,17 @@
 The player's ini keys still override.
 
 **Architecture:**
-- An engine-free `HiresTextMap` parses the map with `Common::INIFile`. It answers typed, precedence-resolved questions per font id: ini beats map beats built-in default, and a `[x:platform]` section beats `[x]`.
+- SCUMM's map parser (`Graphics::HiResFontMap`, ported from `hires-text` and extended) reads the map. The engine-free SCI adapter `resolveFontSettings()` answers precedence-resolved questions per font id: ini beats map beats built-in default, and a `[x:platform]` section beats `[x]`.
 - `GfxCache` turns those answers into one resolved `FontSettings` per font id, which each `GfxFontSet` carries, instead of today's global latin mode.
 - Proportional mode routes ASCII to the TrueType face (as `half` does), but each character's advance is:
-  - the game font's own width for that character (`advance=game`, so layout is identical to the original); or
-  - the TrueType advance rounded to game pixels (`advance=font`).
+  - the game font's own width for that character (`metrics=game`, so layout is identical to the original); or
+  - the TrueType advance rounded to game pixels (`metrics=font`).
+
+**Decisions of 2026-09-26 (after the C5 inventory, `runs/c5-scumm-map-inventory.md`):**
+- **Port, don't rewrite.** SCUMM's `graphics/hires_text/font_map.{h,cpp}` (branch `hires-text`) depends only on `common/`. It is ported to `i18n` unmodified, with its tests, and extended for SCI. There will be one parser.
+- The advance source is named **`metrics=`** (SCUMM's existing key), with values `game`/`font`; `hires_text_metrics` is the ini key.
+- **`[latin]` keeps SCUMM's keys** (`enabled`, `bitmap`, `font`, `metrics`) and gains `mode=` and `space=`. `font=` accepts a face name from `[fonts]` or a path. `enabled=true` is a legacy alias meaning "the engine's current Latin behaviour" (SCI: `mode=proportional` with `metrics=game`; SCUMM: unchanged).
+- Additions must be backward compatible: every existing SCUMM map parses to the same `HiResTextConfig` as before (SCUMM's tests keep passing).
 
 **Tech Stack:** C++ (ScummVM SCI, `common/formats/ini-file.h`), CxxTest, Python harness.
 
@@ -38,7 +44,7 @@ Measured context (`runs/fontcensus/REPORT.md`):
   4. then the built-in default.
 
   `<platform>` is ScummVM's platform code (`Common::getPlatformCode()`, e.g. `pc98`, `dos`).
-- Engine-free classes (`HiresTextMap`, the advance helpers) do not use `g_sci`, `ConfMan` or `GfxScreen`. `GfxCache` feeds them.
+- Engine-free code (the ported `Graphics::HiResFontMap`/`HiResTextConfig`, the SCI adapter `resolveFontSettings`, the advance helpers) do not use `g_sci`, `ConfMan` or `GfxScreen`. `GfxCache` feeds them.
 - No STL. The ScummVM GPL header goes on new files. Commit messages end with exactly:
   ```
   Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
@@ -61,7 +67,7 @@ latin=/System/Library/Fonts/Supplemental/AppleGothic.ttf
 mode=off                     ; off | half | fullwidth | proportional
 face=latin                   ; face name for the Latin range (absent: the font's own face)
 space=keep                   ; keep | fullwidth   (fullwidth mode only)
-advance=game                 ; game | font        (proportional mode only)
+metrics=game                 ; game | font        (proportional mode only; SCUMM's existing key)
 
 [font.4]                     ; one SCI font id
 face=default
@@ -69,7 +75,7 @@ size=16
 latin=proportional           ; overrides [latin] mode for this font
 latin_face=latin
 latin_space=keep
-advance=font
+metrics=font
 
 [font.0:pc98]                ; platform-qualified: wins over [font.0] on PC-98
 latin=fullwidth
@@ -84,14 +90,14 @@ The ini keys map onto the same settings as global overrides:
 | `hires_text_latin` | mode |
 | `hires_text_latin_font` | latin face path |
 | `hires_text_latin_space` | space |
-| `hires_text_latin_advance` | advance (new) |
+| `hires_text_metrics` | metrics (SCUMM's existing ini key, `game`/`font`) |
 
 `[shadow]`, `[glyphs]`, `baseline=` and `[hires] scale` are out of scope. They are parsed and ignored, with no warning, because they are known future keys.
 
 ## Review Focus
 
 1. **The map is absent, or present but empty:** byte-identical (A/B 0 px).
-2. **`advance=game` keeps layout identical:** the same line breaks and box rects as `off` (compare `state` text rects).
+2. **`metrics=game` keeps layout identical:** the same line breaks and box rects as `off` (compare `state` text rects).
 3. **The same face at the same size named by two font ids** opens one `TtfGlyphSource`, not two. Sources are cached per (path, size).
 4. **A map naming a missing face file:** one warning, and that font id falls back to the ini/default face or `.uni`. Nothing goes blank.
 5. **A platform-qualified section** wins only on its platform (unit test with two platforms).
@@ -107,68 +113,60 @@ The ini keys map onto the same settings as global overrides:
 - [ ] **Step 3: Measure.** Run the KQ1-ko intro + tour, the LB1 English intro (`_x/lb1/.../(DOS)`, gameid `laurabow`, to the first dialogue if reachable), and the SQ1 VGA English intro, each with `hires_text_log=true` and `hires_text_font` set so the font set path runs. On English games the scope predicate refuses the key, so for those runs log the font id without the TTF: make logging independent of the scope predicate. Tabulate the font ids per text kind (title/menu, dialogue box, status line, parser echo) into `runs/c4-fontids.md`.
 - [ ] **Step 4:** Commit: `SCI: hires_text_log names the font id and face that draw each line`.
 
-### Task 2: `HiresTextMap` — parse and resolve (engine-free)
+### Task 2: Port SCUMM's map parser, then extend it for SCI (engine-free)
 
-**Files:** create `engines/sci/graphics/hirestextmap.h/.cpp`; test `test/engines/sci/hirestextmap.h`; modify `engines/sci/module.mk`.
+**Files:**
+- Port unmodified from branch `hires-text` (`git -C ~/work/scummvm/repo/scummvm show hires-text:<path>`): `graphics/hires_text/font_map.h`, `graphics/hires_text/font_map.cpp`, `test/graphics/hires_text_font_map.h`. Add `hires_text/font_map.o` to `graphics/module.mk`. Carry the ScummVM headers as they are.
+- Then modify the ported `font_map.{h,cpp}` additively, and extend the ported test file.
+- SCI adapter: create `engines/sci/graphics/hirestextsettings.h/.cpp` (engine-free: no `g_sci`/`ConfMan`).
 
-**Produces:**
+**Additions to the shared config (`HiResTextConfig`), all optional; absent means today's behaviour:**
+- `[latin] mode=off|half|fullwidth|proportional` and `[latin] space=keep|fullwidth` (new fields; `enabled=true` stays a legacy alias the adapter interprets).
+- `[latin] font=` accepts a `[fonts]` face name as well as a path.
+- `[fonts]` names beyond SCUMM's roles are stored as a name→path table; SCUMM's role lookup is unchanged.
+- **Per-id sections `[font.N]`** (and `[font.N:<qualifier>]`), stored as a table `id → { face, size, latin, latin_font, latin_space, metrics }`, each field with a "set" flag. SCUMM ignores the table.
+- Qualified-section precedence uses the parser's existing qualifier mechanism; reuse it for `[font.N:<platform>]`.
+
+**SCI adapter produces:**
 ```cpp
 namespace Sci {
-enum LatinMode { kLatinOff, kLatinHalf, kLatinFullwidth, kLatinProportional };  // extend the existing enum, keep its values
-enum LatinAdvance { kAdvanceGame, kAdvanceFont };
-struct FontSettings {           // everything one SCI font id needs
-	Common::String facePath;     // empty: no TTF for this font id
-	int size;                    // pixels
-	LatinMode latin;
-	Common::String latinFacePath;// empty: the font's own face
-	bool fullwidthSpace;
-	LatinAdvance advance;
-};
-struct HiresTextOverrides {     // the ini layer; unset fields don't override
-	Common::String facePath; bool hasFace;
-	int size; bool hasSize;
-	LatinMode latin; bool hasLatin;
-	Common::String latinFacePath; bool hasLatinFace;
-	bool fullwidthSpace; bool hasSpace;
-	LatinAdvance advance; bool hasAdvance;
-};
-class HiresTextMap {
-public:
-	/** Parse; warnings go into @p warnings (one line each), never fatal. */
-	bool loadFromStream(Common::SeekableReadStream &s, const Common::String &name, Common::StringArray &warnings);
-	/** Resolve every setting for @p fontId on @p platformCode, applying @p ini on top.
-	 *  Relative face paths resolve against @p gameDir (returned as native paths). */
-	FontSettings resolve(int fontId, const Common::String &platformCode,
-	                     const HiresTextOverrides &ini, const Common::String &gameDir) const;
-	bool isLoaded() const;
-};
+enum LatinMode { kLatinOff, kLatinHalf, kLatinFullwidth, kLatinProportional }; // textlatin.h: append kLatinProportional, don't renumber
+struct FontSettings { Common::String facePath; int size; LatinMode latin;
+	Common::String latinFacePath; bool fullwidthSpace; Graphics::HiResMetricsSource metrics; };
+struct HiresTextOverrides { /* one field + has-flag per ini key: hires_text_font, _font_size, _latin, _latin_font, _latin_space, hires_text_metrics */ };
+/** Precedence: ini > [font.N:<platform>] > [font.N] > [latin:<platform>]/[latin] (or [hires] for face/size) > default. */
+FontSettings resolveFontSettings(const Graphics::HiResTextConfig &map, bool mapLoaded, int fontId,
+                                 const HiresTextOverrides &ini, const Common::Path &gameDir);
 }
 ```
-Defaults:
-- size 16, latin off, space keep, advance game, no face.
-- If `[font.N]` names no face, use `[hires] font` → `[fonts]`. If `[fonts]` has only `default`, that one.
+Defaults: size 16, latin off, space keep, metrics game, no face. A face name resolves through `[fonts]`; relative paths resolve against the game directory.
 
-- [ ] **Step 1: tests:**
-  - `test_empty_map_resolves_defaults`;
-  - `test_font_section_overrides_latin_section`;
-  - `test_platform_section_wins_on_its_platform_only`;
-  - `test_ini_overrides_map`;
-  - `test_face_name_resolves_through_fonts_section`;
-  - `test_relative_face_path_joins_game_dir`;
-  - `test_unknown_key_warns_once_and_is_ignored`;
-  - `test_bad_value_warns_and_defaults` (e.g. `latin=wide`, `size=abc`, `size=300`);
-  - `test_future_sections_are_silent` (`[shadow]`, `[glyphs]`).
-- [ ] **Step 2:** Run and confirm the tests fail. Then implement with `Common::INIFile` (check whether it lower-cases keys and sections, and whether it tolerates `;` comments and `:` in section names; adapt or pre-process if not, and say which).
-- [ ] **Step 3:** Run the tests; all pass.
-- [ ] **Step 4:** Commit: `SCI: hires_text.map resolves per-font settings, with ini on top`.
+- [ ] **Step 1:** Port the three files unmodified. Build, and check that `make test` passes, including SCUMM's ported map tests. Commit: `GRAPHICS: Bring the hi-res text map parser from the hires-text line`.
+- [ ] **Step 2: tests first** for the additions:
+  - Parser (`test/graphics/hires_text_font_map.h`):
+    - `test_latin_mode_and_space_parse`;
+    - `test_font_id_sections_parse`;
+    - `test_font_id_qualified_section_wins_for_its_qualifier`;
+    - `test_latin_font_accepts_face_name`;
+    - `test_existing_scumm_maps_unchanged` (feed the map examples from SCUMM's `HIRES_TEXT_SETUP.md` and assert the same fields as before);
+    - `test_bad_values_warn_and_default`.
+  - SCI adapter (`test/engines/sci/hirestextsettings.h`):
+    - `test_empty_map_defaults`;
+    - `test_font_section_overrides_latin_section`;
+    - `test_platform_section_wins_on_its_platform_only`;
+    - `test_ini_overrides_map`;
+    - `test_enabled_true_means_proportional_game`;
+    - `test_relative_face_path_joins_game_dir`.
+- [ ] **Step 3:** Run and confirm the tests fail. Implement. Run them again; all pass.
+- [ ] **Step 4:** Commit: `GRAPHICS: The hi-res text map learns per-font sections and Latin modes, and SCI resolves them`.
 
 ### Task 3: Per-font settings drive the font sets
 
 **Files:** modify `engines/sci/graphics/cache.{h,cpp}`, `fontset.{h,cpp}`, `text16.{h,cpp}` (latin mode now per font), and `fontunicode.*` if needed.
 
-- [ ] **Step 1:** `GfxCache` loads the map once, under the scope predicate: game-dir `hires_text.map` or ini `hires_text_map`, with warnings emitted once each.
-  - Build `HiresTextOverrides` from today's ini keys, plus the new `hires_text_latin_advance`.
-  - For each font id when its set is created, call `resolve()` and keep the `FontSettings` in the set.
+- [ ] **Step 1:** `GfxCache` loads the map once, under the scope predicate: game-dir `hires_text.map` or ini `hires_text_map`, via `Graphics::HiResFontMap::loadFromStream` with qualifiers `{<platform>}`, with warnings emitted once each.
+  - Build `HiresTextOverrides` from today's ini keys, plus `hires_text_metrics`.
+  - For each font id when its set is created, call `resolveFontSettings()` and keep the `FontSettings` in the set.
   - TTF sources come from a small cache keyed by (path, size). Build a `RoutedGlyphSource` when `latinFacePath` differs. On a failed open: one warning per path, then fall back as today (the ini face, then `.uni`).
 - [ ] **Step 2:** Replace the global latin mode reads (`getLatinMode()` / `getLatinSpaceFullwidth()` and `GfxText16`'s cached copies) with the current font set's settings. `GfxText16` must refresh them whenever the font changes (`SetFont`/`GetFont`).
 - [ ] **Step 3:** Invariants:
@@ -178,7 +176,7 @@ Defaults:
 - [ ] **Step 5:** Per-font proof. Use a map with `[font.0] latin=fullwidth` and `[font.4] latin=half`, choosing ids by Task 1's table so both appear on one screen. Capture and describe which text got which mode.
 - [ ] **Step 6:** Commit: `SCI: every font id gets its own hi-res settings from hires_text.map`.
 
-### Task 4: `latin=proportional`, `advance=game|font`
+### Task 4: `latin=proportional`, `metrics=game|font`
 
 **Files:**
 - modify `engines/sci/graphics/glyphsource.h` (add `virtual int advance(uint32 cp) { return 0; }`: advance in hi-res pixels, 0 = unknown);
@@ -191,11 +189,11 @@ Defaults:
 **Behaviour:**
 - **Routing:** ASCII U+0020..U+007E goes to the TrueType face, as in half mode. There is no remap.
 - **Advance** for an ASCII character `c` in font `f`:
-  - `advance=game`: `gameFont->getCharWidth(c)` in game pixels, from font f's own resource face. Layout is then identical to `off`.
-  - `advance=font`: `max(1, round(ttfAdvanceHires(c) / 2))` game pixels. If the source cannot say (0), use `game`.
+  - `metrics=game`: `gameFont->getCharWidth(c)` in game pixels, from font f's own resource face. Layout is then identical to `off`.
+  - `metrics=font`: `max(1, round(ttfAdvanceHires(c) / 2))` game pixels. If the source cannot say (0), use `game`.
 - **Drawing:** the TrueType glyph is drawn with its origin at the start of the advance box. It is not centred, and its own bearing is kept. Ink may extend past the box, as in any proportional font. `drawToBuffer` does the same.
 - `getCharWidth` (layout) and the draw advance must use the same helper, so measuring and drawing agree.
-- **Pure helper:** `int latinAdvanceGamePx(LatinAdvance mode, int gameWidth, int ttfAdvanceHires, int scale)`.
+- **Pure helper:** `int latinAdvanceGamePx(Graphics::HiResMetricsSource metrics, int gameWidth, int ttfAdvanceHires, int scale)`.
 
 - [ ] **Step 1: tests (pure helper):**
   - game mode returns gameWidth;
@@ -206,15 +204,15 @@ Defaults:
   Plus a `TtfGlyphSource` test (skipped without the macOS font): `advance('i') < advance('m')`, and both > 0.
 - [ ] **Step 2:** Implement. Run make and make test.
 - [ ] **Step 3: Captures** (KQ1-ko, SD Gothic Neo, AppleGothic as the latin face):
-  - `proportional` + `advance=game`: every `state` text rect equals the `off` run (layout identical). PNG crops of the intro box and look/unknown.
-  - `proportional` + `advance=font`: PNG crops. Report the line-break differences against `off`.
+  - `proportional` + `metrics=game`: every `state` text rect equals the `off` run (layout identical). PNG crops of the intro box and look/unknown.
+  - `proportional` + `metrics=font`: PNG crops. Report the line-break differences against `off`.
   - Compare both visually with `half` and `fullwidth` in one sheet `shots/c4/latin_modes.png` (off / half / fullwidth / proportional-game / proportional-font, same box).
 - [ ] **Step 4:** Commit: `SCI: hires_text latin=proportional, advancing by the game font or by the TrueType face`.
 
 ### Task 5: Docs
 
 - [ ] **Step 1:** In the docs repo:
-  - update `HIRES_COMPOSITOR_DESIGN.md` §2.2 to the syntax actually implemented (plus the ini key table and `hires_text_latin_advance`);
+  - update `HIRES_COMPOSITOR_DESIGN.md` §2.2 to the syntax actually implemented (plus the ini key table, `hires_text_metrics`, and the SCUMM-compatible `[latin]` additions);
   - record in §5 the Task 1 font-id table and the Task 4 captures;
   - write a translator-facing `docs/i18n/HIRES_TEXT_MAP.md`: a complete annotated example for KQ1-ko, precedence, the modes with pictures (link the shots), and the warnings to expect.
 
