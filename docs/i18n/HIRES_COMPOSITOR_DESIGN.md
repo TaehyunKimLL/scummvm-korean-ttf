@@ -417,6 +417,37 @@ margin for is gone: the Task 6 layer dump has no coverage at hi-res rows
 driver's own scaled bitmap, outside any layer coverage, and did not
 reproduce); English intro byte-identical on every `.bin`, no `_layer.bin`.
 
+#### Measured (step 5 early: `hires_text_font=`, engine `95aa1b1348`)
+
+`[measured]` `hires_text_font=` wired into `GfxCache::loadUnicodeFont()`:
+opens the named face through `TtfGlyphSource::create()`, timed with
+`g_system->getMillis()`, before falling back to the bundled `.uni` names.
+Same font as the earlier 1bpp/8bpp measurement above, live rather than
+pre-baked: **Apple SD Gothic Neo (`AppleSDGothicNeo.ttc` face 0)** at
+16px.
+
+| Scenario | Face open time | Glyphs rasterised by exit | Total render time | Mean ms/glyph |
+|---|---|---|---|---|
+| KQ1 intro, Korean (`kq1_intro.py`) | 11 ms | 103 | 3 ms | 0.029 |
+| KQ1 tour, Korean (`kq1_tour.py`, longer session) | 10 ms | 111 | 3 ms | 0.027 |
+
+`[measured]` Distinct raw RGB565 colours in the second dialogue box's
+text area, `intro_f45`, same crop as above (`x∈[60,579) y∈[272,337)`):
+**71** - matching the pre-baked 8bpp variant's count exactly, as expected
+since both rasterise the same face at the same size with 8-bit coverage.
+
+`[measured]` Invariants:
+- Without the key: **0 px** A/B (`c1ab.py`) against
+  `runs/baseline-4a0f7f0e1c/intro-ko`.
+- Bad path (`hires_text_font=/nonexistent.ttc`): the game still starts;
+  `run.log` shows exactly one `hires_text_font` warning
+  (`hires_text_font /nonexistent.ttc: could not open the file; using the
+  .uni fonts`), then falls through to the `.uni` fonts; **0 px** A/B
+  against the same baseline.
+- English intro without the key: all 16 baseline `.bin` files
+  byte-identical, 0 `_layer.bin` files present.
+- `make test`: **456/456**.
+
 ## 6. Build order
 
 Each step lands on `i18n` through its own card worktree (`TREES.md`) and
