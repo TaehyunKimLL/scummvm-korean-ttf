@@ -60,7 +60,7 @@
 - **No STL** in new code (`Common::Array`, `Common::HashMap`, `Common::String`); in `engines/ags` use the engine's own containers as surrounding code does, no new `<vector>`/`<map>` includes. The ScummVM GPL header on every new source file (new test headers follow the existing `test/graphics/hires_text_*.h`, which carry none).
 - **Commits** end with exactly:
   ```
-  Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01HaZ452x9dK6wjToh3cZ3Cf
   ```
   Commit subjects use the ScummVM prefixes (`GRAPHICS:`, `SCUMM:`, `AGS:`, `GRIM:`, `SWORD1:`, `SWORD2:`, `SCI:`, `GUI:`, `TEST:`).
