@@ -330,7 +330,7 @@ struct LineSpan {
 	uint32 first, end;        ///< units drawn on this line: [first, end), trailing spaces excluded
 	uint32 next;              ///< first unit of the next line (after dropped spaces / the newline)
 	uint32 byteStart, byteEnd, byteNext;  ///< the same three, as byte offsets
-	int width;                ///< LayoutMetrics::width(run, first, end)
+	int width;                ///< ink width: width() of [first, end) minus the spaces and escapes at its end
 	bool forced;              ///< ended by a kUnitNewline unit
 	bool emergency;           ///< no break opportunity fitted: split at a cluster boundary
 };
@@ -517,7 +517,18 @@ One rule set, by **character class**, not by the language setting
 (`TextLayout::canBreakBefore(run, i)` between `a = cp[i-1]` and `b = cp[i]`):
 
 1. Never inside a cluster: not before a combining mark, not inside a control
-   unit sequence.
+   unit sequence. **Escapes** (control units that are not newlines): never a
+   break right after one; a break before a run of them is judged between the
+   unit before the run and the first unit after it. So an escape glued to
+   the front of a word moves to the next line with it (`hello <E>world` →
+   `hello` / `<E>world`); in *space, escapes, space, text* the only
+   opportunity is before the text, so the escapes stay at the **end** of the
+   previous line (`hello <E> world` → `hello <E>` / `world`) and the spaces
+   around them hang: the line fits on, and `LineSpan::width` reports, its
+   ink width. Escapes at the end of the text stay on the last line. Rendering
+   is in order, so an escape's state (colour) still reaches the glyphs after
+   it. An escape is on a line alone only if the text after it does not fit
+   even as an emergency split.
 2. After a space run (`kUnitSpace`: U+0020, U+3000; not U+00A0): yes; the
    spaces are dropped at the line end (`LineSpan::next`).
 3. **Kinsoku** (`rules.kinsoku`): not before `kinsokuNoStart(b)`, not after
