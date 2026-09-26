@@ -219,14 +219,10 @@ latin=fullwidth
   remains is trimmed again), so `color=0 ; DOS` parses as `0`; a `;` with
   anything else before it stays part of the value
   (`single=my;font.fnt`). `[glyphs]` (bare, qualified, or scoped -
-  `[glyphs:cs1]`) also takes ranges: the key is `<code>-<code>` (each half
-  hex `0x..` or decimal), the value `keep` or `+<offset>`, expanding into
-  the same per-code override table a single entry fills, with a single
-  code beating a range in its own section and a later range beating an
-  earlier one for the codes they share. The exact warning texts, the
-  bounds (a range past `0xFFFF`, a target past `U+10FFFF`, the
-  131072-code-per-load limit) and a worked example are in
-  `HIRES_TEXT_MAP.md`.
+  `[glyphs:cs1]`) also takes ranges. The range syntax, its bounds, the
+  131072-code-per-load limit, the precedence rules, and a worked example
+  are all in `HIRES_TEXT_MAP.md`, under "`[glyphs]` ranges" - this page
+  does not restate them.
 - **One table of sections, common versus engine-specific.** "Parsed"
   means the shared parser (`graphics/hires_text/font_map.cpp`) reads the
   key into `HiResTextConfig`, for both engines alike; "applies" means the

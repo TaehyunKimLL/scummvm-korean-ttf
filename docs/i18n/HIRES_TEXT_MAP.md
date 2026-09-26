@@ -187,8 +187,61 @@ same way for both engines, so a bad entry - including a bad range - gives
 the same warning on an SCI map as it would on a SCUMM one (see "Warnings
 to expect" below). SCI just does not act on the resulting table yet: every
 game still draws its own glyphs for the codes a `[glyphs]` section covers.
-The full range syntax, its bounds and its precedence rules are in
-`HIRES_COMPOSITOR_DESIGN.md` §2.2.
+
+### `[glyphs]` ranges
+
+A range remaps or keeps many codes in one line, instead of one `[glyphs]`
+entry per code:
+
+```ini
+[glyphs]
+; ASCII to the fullwidth forms block, all at once
+0x21-0x7E=+0xFEE0
+; the caret in that range stays the game's own ellipsis
+0x5e=keep
+; a whole block left to the game's font
+0x80-0x9F=keep
+; a single code, offset form - same as 0x41=0x61
+0x41=+0x20
+```
+
+- The key is `<code>-<code>`: each half is hex `0x..` or decimal (never
+  `u+` - a range key can only ever be a plain code range, since
+  `Common::INIFile` rejects a `u+` key, and the whole map with it, exactly
+  as a single `u+`-keyed entry already does).
+- The value is `keep` (leave the whole range untouched) or `+<n>` (remap
+  every code in the range by the same offset; `n` is `0x..` or decimal,
+  never `u+` - an offset is a distance, not a code point).
+- `+<n>` also works on a single code: `0x41=+0x20` is the same as
+  `0x41=0x61`.
+- **Bounds**, each one warns and ignores just that one entry: a range must
+  not end before it starts (`end < start`); its end must not exceed
+  `0xFFFF`, since game codes are at most double-byte (a single code's
+  target keeps its own `U+10FFFF` cap); `end + offset` must not exceed
+  `U+10FFFF`; a malformed half (`0x21-`, `-0x7E`, `0x21-0x7E-0x80`,
+  `0xzz-0x7E`) is rejected the same way. A range cannot take an absolute
+  (`u+`) target - `0x21-0x7E=u+FF01` is refused, because it would draw 94
+  different codes as one glyph.
+- **Table limit:** ranges may add at most 131072 codes per map load,
+  counted over the common table and every scope together (two full
+  `0x0000-0xFFFF` ranges' worth). A range that would cross the limit is
+  ignored whole, with one warning; ranges earlier in the file still apply.
+  Single-code entries never count against this limit.
+- **Precedence**, most specific wins:
+  1. **Across sections, unchanged:** a qualified section (`[glyphs:cs1]`)
+     beats the bare `[glyphs]` section for the codes it names, whether the
+     entry is a range or a single code.
+  2. **Within one section, a single code always beats a range that covers
+     it, whatever order the lines are written in** - that is how
+     `0x5e=keep` above punches a hole in the `0x21-0x7E` range next to it,
+     even though it comes after it.
+  3. **Between two ranges in the same section, the later line wins** for
+     the codes they share.
+  4. Overlaps never warn: a hole punched in a range and a narrower range
+     layered over a wider one are both intended uses.
+
+The exact warning text for each bound and for the table limit is in
+"Warnings to expect" below.
 
 ### The ini keys, and what they override
 
