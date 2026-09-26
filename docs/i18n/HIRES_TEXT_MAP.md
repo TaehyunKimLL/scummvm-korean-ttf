@@ -25,9 +25,19 @@ draws with whatever the ini keys and built-in defaults say.
 
 It is plain INI syntax (`common/formats/ini-file.h`): `[section]` headers,
 `key=value` lines, `;` comments on their own line. **Inline comments are
-not supported** - `color=0 ; DOS` keeps the `; DOS` as part of the value
-and fails to parse. Put comments on their own line instead, above the key
-they describe, as every example on this page does.
+also supported now, on every key the parser reads:** a `;` preceded by a
+space or a tab ends the value there (the rest is dropped, and what is left
+is trimmed again), so `color=0 ; DOS` parses as `0`. A `;` with anything
+else before it stays part of the value - `single=my;font.fnt` keeps its
+`;`. The one edge case outside "a value with a whitespace-`;` parses as
+before": `key=;x` also reads as empty, even though nothing in that raw
+line has whitespace before the `;` - the semicolon sits at the very start
+of the value, and that alone ends it, the same as `key= ; note` does once
+the leading space is trimmed away. `#` is never an inline comment marker,
+and this rule is the map's own - `scummvm.ini` (read by `ConfigManager`)
+has no inline comments at all. Comments still read best on their own line,
+above the key they describe, and every own-line example on this page
+keeps doing exactly that.
 
 **Relative paths in the map are the map's own.** A `[fonts]` entry, or a
 path written in place of a face name (`face=`, `latin_font=`, ...), that
@@ -166,10 +176,19 @@ optionally `[font.4:pc98]`. `[font.04]` or `[font.4:]` (an empty
 qualifier) are rejected with a warning, not silently treated as `[font.4]`.
 
 **Not yet implemented**, though a map that already has them for SCUMM
-will not warn: `[shadow]`, `[glyphs]` remap ranges, `baseline=`, and
-`[hires] scale=` beyond what the compositor already fixes. Per-glyph
-kerning/centring in proportional mode and the legacy SJIS face are also
-not implemented yet.
+will not warn: `[shadow]`, `baseline=`, and `[hires] scale=` beyond what
+the compositor already fixes. Per-glyph kerning/centring in proportional
+mode and the legacy SJIS face are also not implemented yet.
+
+**`[glyphs]` is parsed, but not yet applied on SCI.** The shared parser
+(`graphics/hires_text/font_map.cpp`) reads single codes, `keep`, ranges
+(`0x21-0x7E=+0xFEE0`), scopes (`[glyphs:cs1]`) and qualified sections the
+same way for both engines, so a bad entry - including a bad range - gives
+the same warning on an SCI map as it would on a SCUMM one (see "Warnings
+to expect" below). SCI just does not act on the resulting table yet: every
+game still draws its own glyphs for the codes a `[glyphs]` section covers.
+The full range syntax, its bounds and its precedence rules are in
+`HIRES_COMPOSITOR_DESIGN.md` §2.2.
 
 ### The ini keys, and what they override
 
@@ -341,6 +360,20 @@ SCUMM:
   enabled=` is not `true`, `false` or a number.
 - `HiResText: unknown legacy metrics '<value>', ignoring` - `[latin]
   metrics=` is not `game`, `font`, `ttf` or `bitmap`.
+
+`[glyphs]` range keys (`<code>-<code>`), same prefix, same "warn once and
+use the default" rule - the whole entry is ignored, the rest of the map
+still loads:
+
+- `HiResText: glyph range '<key>' is not <code>-<code>, ignoring`
+- `HiResText: glyph range '<key>' ends before it starts, ignoring`
+- `HiResText: glyph range '<key>' goes past 0xFFFF, ignoring`
+- `HiResText: glyph range <key>: '<value>' is neither 'keep' nor
+  '+<offset>', ignoring`
+- `HiResText: glyph <key>: '<value>' goes past U+10FFFF, ignoring` - a
+  range's end (plus its offset), or a single code's `+<offset>` target
+- `HiResText: glyph range '<key>' would take the map past 131072 range
+  codes, ignoring`
 
 Each of these gives exactly one warning per offending key or section (not
 one per line drawn), and the affected setting falls back to whatever the

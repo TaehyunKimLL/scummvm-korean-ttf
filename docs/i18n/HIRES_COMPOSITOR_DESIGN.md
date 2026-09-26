@@ -129,9 +129,6 @@ with a worked KQ1-ko example, precedence, and the exact warning texts, is
 `HIRES_TEXT_MAP.md`):
 
 ```ini
-; Comments go on their own line: the INI reader keeps an inline "; ..."
-; as part of the value.
-
 ; face used by a [font.N] that names none
 [hires]
 ; a [fonts] name, or a path ("face=" also works)
@@ -216,13 +213,51 @@ latin=fullwidth
   per font id - only the map can. A translation that wants font 300 drawn
   proportionally and font 0 fullwidth needs a map; the ini keys alone
   apply the same choice to every id.
-- **Out of scope for now** (later work, per the plan): `[shadow]`,
-  `[glyphs]` remap ranges, `baseline=`, and `[hires] scale=` beyond what
-  the compositor already fixes. They are parsed - so a map that already
-  uses them for SCUMM does not warn on SCI - but not yet applied.
-  Per-glyph kerning/centring in proportional mode, GUI options for any of
-  this, scale 3, and the legacy SJIS face are also out of scope; see the
-  plan document's "Out of scope" list.
+- **Inline comments and `[glyphs]` ranges, stated once for both
+  engines.** The shared parser drops a trailing comment from every key's
+  value: a `;` preceded by a space or a tab ends the value there (what
+  remains is trimmed again), so `color=0 ; DOS` parses as `0`; a `;` with
+  anything else before it stays part of the value
+  (`single=my;font.fnt`). `[glyphs]` (bare, qualified, or scoped -
+  `[glyphs:cs1]`) also takes ranges: the key is `<code>-<code>` (each half
+  hex `0x..` or decimal), the value `keep` or `+<offset>`, expanding into
+  the same per-code override table a single entry fills, with a single
+  code beating a range in its own section and a later range beating an
+  earlier one for the codes they share. The exact warning texts, the
+  bounds (a range past `0xFFFF`, a target past `U+10FFFF`, the
+  131072-code-per-load limit) and a worked example are in
+  `HIRES_TEXT_MAP.md`.
+- **One table of sections, common versus engine-specific.** "Parsed"
+  means the shared parser (`graphics/hires_text/font_map.cpp`) reads the
+  key into `HiResTextConfig`, for both engines alike; "applies" means the
+  engine's own adapter acts on the parsed value. Qualifiers stay
+  engine-defined: SCUMM uses the game id and then `v<N>`; SCI uses the
+  platform code.
+
+  | Section / key | Parsed (shared) | SCUMM applies | SCI applies |
+  |---|---|---|---|
+  | `[hires] scale`, `alpha` | yes | yes | no (the compositor fixes scale; alpha by ini) |
+  | `[hires] font=`/`face=`, `size=` | yes | no | yes |
+  | `[encoding] codepage` | yes | yes | no (encoding comes from detection, §2) |
+  | `[bitmap] multi`, `single` / `glyphs` | yes | yes / no | no |
+  | `[fonts]` roles `default` / `bold`, `title` | yes | yes / no | — |
+  | `[fonts]` as a name table | yes | no | yes |
+  | `[sizes]` | yes | no | no |
+  | `[render] metrics` / `mode` | yes | yes / no | no (per font: `[latin]`/`[font.N] metrics=`) |
+  | `[latin] enabled`, `bitmap` | yes | yes (`bitmap=` implies `enabled`) | `enabled=true` is an alias; `bitmap=` warns |
+  | `[latin] font`, `metrics` | yes | no | yes |
+  | `[latin] mode`, `space` | yes | no | yes |
+  | `[font.N]`, `[font.N:<platform>]` | yes | no | yes |
+  | `[shadow] mode` (`none/drop/outline/stroke/game`), `offset`, `color` | yes | yes | no (later; `stroke` stays in the shared enum) |
+  | `[glyphs]`, `[glyphs:<scope>]`, ranges | yes | yes (scopes `cs0..cs19`) | no (later) |
+  | `[map] height_N` | yes | no | no |
+  | `[translation] file` | yes | no | no (translation data stays out of the map, §2.2) |
+
+  A section or key with "no" in both apply columns is parsed - so a map
+  that already uses it for the other engine does not warn - but not yet
+  acted on by either adapter. Per-glyph kerning/centring in proportional
+  mode, GUI options for any of this, scale 3, and the legacy SJIS face are
+  also out of scope; see the plan document's "Out of scope" list.
 
 ## 3. Data flow
 
