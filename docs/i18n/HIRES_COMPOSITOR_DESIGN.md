@@ -428,8 +428,18 @@ pre-baked: **Apple SD Gothic Neo (`AppleSDGothicNeo.ttc` face 0)** at
 
 | Scenario | Face open time | Glyphs rasterised by exit | Total render time | Mean ms/glyph |
 |---|---|---|---|---|
-| KQ1 intro, Korean (`kq1_intro.py`) | 11 ms | 103 | 3 ms | 0.029 |
-| KQ1 tour, Korean (`kq1_tour.py`, longer session) | 10 ms | 111 | 3 ms | 0.027 |
+| KQ1 intro, Korean (`kq1_intro.py`) | ~10 ms | 103 | ~3 ms | ≪ 1 (~0.03) |
+| KQ1 tour, Korean (`kq1_tour.py`, longer session) | ~10 ms | 111 | ~3 ms | ≪ 1 (~0.03) |
+
+The millisecond figures are order-of-magnitude only: `getMillis()` has
+about 1 ms resolution and a single glyph render takes well under that, so
+the total is a sum of mostly-zero deltas and the mean is approximate. The
+glyph counts are exact.
+
+The load-time budget of at most 32 renders (26 probes plus the bounded
+vertical-fit retry) counts `TtfGlyphSource`'s own renders only.
+`Graphics::loadTTFFont` also caches about 256 Latin-1 glyphs for each size
+it opens, and a face that needs k fit retries opens k+1 sizes.
 
 `[measured]` Distinct raw RGB565 colours in the second dialogue box's
 text area, `intro_f45`, same crop as above (`x∈[60,579) y∈[272,337)`):
@@ -441,12 +451,32 @@ since both rasterise the same face at the same size with 8-bit coverage.
   `runs/baseline-4a0f7f0e1c/intro-ko`.
 - Bad path (`hires_text_font=/nonexistent.ttc`): the game still starts;
   `run.log` shows exactly one `hires_text_font` warning
-  (`hires_text_font /nonexistent.ttc: could not open the file; using the
-  .uni fonts`), then falls through to the `.uni` fonts; **0 px** A/B
+  (`hires_text_font /nonexistent.ttc: does not exist; using the .uni
+  fonts`), then falls through to the `.uni` fonts; **0 px** A/B
   against the same baseline.
 - English intro without the key: all 16 baseline `.bin` files
   byte-identical, 0 `_layer.bin` files present.
-- `make test`: **456/456**.
+- `make test`: **456/456** at the time; 458/458 after the review fixes
+  below.
+
+`[measured]` Behaviour after the final-review fixes (engine `8d9f303d55`):
+- Scope: the key is read from the game's own domain only (not
+  `[scummvm]`), and is honoured only below SCI2 for a CJK code page
+  (949/932/936/950). Elsewhere one warning (`hires_text_font is ignored:
+  ...`) and the `.uni` search as before; English KQ1 with the key set:
+  16 `.bin` files byte-identical, no `_layer.bin`. Interim until the
+  `hires_text` master switch (step 3).
+- `hires_text_font_size`: parsed without `ConfMan.getInt` (which aborts on
+  text); a non-numeric value or one outside 8..64 gives one warning and
+  16. `TtfGlyphSource::create` itself refuses sizes outside 6..255.
+- The retry callback is a small `FitProbe` interface; no standard-library
+  header in engine code.
+- A Korean game refuses a face whose seven Hangul probes draw no ink
+  (`face has no Hangul glyphs`) and falls back to `.uni` with one warning;
+  Arial on KQ1-ko gives 0 px A/B. Other CJK code pages have no such check
+  yet.
+- An empty value (`empty path`) or a directory (`is a directory`) gives
+  exactly one warning and the `.uni` fonts; 0 px A/B.
 
 ## 6. Build order
 
