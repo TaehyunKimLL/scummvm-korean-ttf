@@ -110,71 +110,96 @@ beside them. SCI32, Mac hi-res and Windows 256-colour KQ6 are excluded.
 
 ### 2.2 `hires_text.map`: shipped with a translation or font pack
 
-INI format, same name and shared sections as SCUMM's map
-(`engines/scumm/HIRES_TEXT_SETUP.md` on `hires-text`). `[font.N]` and the
-`latin_*` keys are SCI-specific.
+INI format, parsed by one shared reader, `Graphics::HiResFontMap`
+(`graphics/hires_text/font_map.{h,cpp}`), ported unmodified from SCUMM's
+`hires-text` branch and then extended. SCUMM and SCI read the same file
+format and the same parser; every existing SCUMM map still parses to the
+same result (SCUMM's own tests pin this). `[font.N]` and the `latin_*`
+keys are SCI-specific - SCUMM never reads them.
+
+The file is `hires_text.map` in the game directory, or the path named by
+the ini key `hires_text_map`. It is honoured only under the same scope
+predicate as `hires_text_font` (SCI16, below SCI2, a CJK code page); on
+any other game it produces one warning and is ignored. Unknown sections or
+keys, and bad values, each produce one warning and use the default - the
+file is never rejected whole.
+
+Below is the subset SCI implements today (a full translator walkthrough,
+with a worked KQ1-ko example, precedence, and the exact warning texts, is
+`HIRES_TEXT_MAP.md`):
 
 ```ini
-[hires]
-scale=2                       ; the scale this font pack is built for
+[hires]                      ; face used by a [font.N] that names none
+font=default                 ; a [fonts] name, or a path ("face=" also works)
+size=16                      ; pixels
 
-[fonts]                       ; face name -> file
-default=NanumGothic.ttf
-title=NanumMyeongjo.ttf
-baked=korean.uni              ; used when the build has no FreeType
+[fonts]                      ; face name -> file; relative paths are taken
+default=NanumGothic.ttf      ; against the game directory
+latin=/System/Library/Fonts/Supplemental/AppleGothic.ttf
 
-[font.4]                      ; per SCI font id: SCI fonts differ in height (KQ1: 8, 9, 12)
-face=default
-size=16                       ; pixel size at N×
-baseline=+1                   ; vertical nudge, in game pixels
-advance=cell                  ; cell (the legacy fixed cell) | game | font (later: proportional)
-latin_face=default
-latin_map=fullwidth
+[latin]                      ; defaults for every font id that has no [font.N]
+mode=proportional            ; off | half | fullwidth | proportional
+font=latin                   ; a [fonts] name for the Latin range ("face=" also works)
+space=keep                   ; keep | fullwidth   (fullwidth mode only)
+metrics=game                 ; game | font        (proportional mode only)
 
-[font.300]
-face=title
-size=24
-latin_map=none
+[font.4]                     ; one SCI font id (Task 1: KQ1-ko's dialogue box is 300)
+face=default                 ; "font=" also works
+size=16
+latin=proportional           ; overrides [latin] mode for this font id
+latin_font=latin             ; "latin_face=" also works
+latin_space=keep
+metrics=font
 
-[latin]                       ; single-byte text through a TTF too; default false keeps the invariant
-enabled=true
-face=default
-map=fullwidth                 ; none | fullwidth  (shorthand for the [glyphs] rules below)
-advance=game                  ; game | cell | font
-size=14
-baseline=0
-
-[shadow]                      ; outline or drop shadow; colour is a palette index
-mode=outline                  ; none | drop | outline | game
-offset=1
-color=0
-
-[shadow:pc98]                 ; qualified sections win on their platform, as in SCUMM
-color=8
-
-[glyphs]                      ; applied to the code point before a face is chosen
-0x21-0x7E=+0xFEE0             ; ASCII ! .. ~  ->  fullwidth ！ .. ～
-0x20=0x3000                   ; space -> ideographic space
-0x2026=keep                   ; leave this code to the original face
+[font.0:pc98]                ; platform-qualified: wins over [font.0] on PC-98 only
+latin=fullwidth
 ```
 
-- **Remapping happens once, at the code point.** The order is: decode,
-  apply `[glyphs]` (and `[latin] map`), then choose a face. This works the
-  same for UTF-8, cp949 and SJIS.
-- **Fullwidth and advance.**
-  - `advance=game` keeps the game font's ASCII width and centres the
-    fullwidth glyph in it, so the layout is unchanged.
-  - `advance=cell` uses the double-byte cell. It looks like PC-98 text,
-    but lines get longer. `kTextSize` reports the new width (D6), so
-    windows follow. Coordinates a script hard-codes do not follow, and
-    that risk belongs to whoever writes the map.
-- **Invariant, relaxed on request only.** "Single-byte text is drawn by the
-  game's own font" holds unless `[latin] enabled=true`.
-- **One map drives both font sources.** The bake tool reads the same map
-  to produce the `baked=` file, so runtime TTF and pre-baked glyphs come
-  from one description.
-- **Translation data stays out.** `text.NNN` and `sci-<lang>.str` are
-  unchanged. The map says only how to draw.
+- **Precedence, per setting:** ini key (global) > `[font.N:<platform>]` >
+  `[font.N]` > `[latin:<platform>]`/`[latin]` (or `[hires:<platform>]`/
+  `[hires]` for face and size) > the built-in default. `<platform>` is
+  `Common::getPlatformCode()` (e.g. `pc98`, `dos`); it is applied when the
+  map is parsed, so a `[font.N]` the adapter reads later already holds the
+  winner of its qualified/bare pair, key by key.
+- **Defaults:** size 16, latin off, space keep, metrics game, no face - so
+  a map (or no map at all) that says nothing about a font id reproduces
+  today's behaviour exactly.
+- **Face names resolve through `[fonts]`.** A name not in the table is
+  treated as a path; a relative path is taken against the game directory.
+  Ini paths (`hires_text_font`, `hires_text_latin_font`) are used exactly
+  as given, unchanged from before the map existed.
+- **`enabled=true` is a legacy alias**, kept for SCUMM-map compatibility:
+  with no `mode=` or `[font.N] latin=` set anywhere, it means
+  "the engine's current Latin behaviour" - for SCI that is
+  `latin=proportional` with `metrics=game` (SCUMM's own meaning is
+  unchanged). SCUMM's `bitmap=` also implies `enabled` for SCUMM, but SCI
+  has no bitmap Latin path: a map that sets only `bitmap=` gets one
+  warning (`hires_text.map: [latin] bitmap= is SCUMM-only, ignored`) and
+  no effect.
+- **The ini keys are global overrides**, each beating every map setting:
+
+  | ini key | overrides |
+  |---|---|
+  | `hires_text_font` | The face path, for every font id at once - beats `[font.N] face=` too, not only `[hires] font=` |
+  | `hires_text_font_size` | size, for every font id (8..64) |
+  | `hires_text_latin` | latin mode (`off`/`half`/`fullwidth`/`proportional`), for every font id |
+  | `hires_text_latin_font` | the Latin-range face, for every font id |
+  | `hires_text_latin_space` | space (`keep`/`fullwidth`), for every font id |
+  | `hires_text_metrics` | metrics (`game`/`font`), for every font id |
+  | `hires_text_map` | which map file is read, instead of `hires_text.map` |
+  | `hires_text_log` | diagnostic: log each line and which face drew it |
+
+  Because the ini keys are global, they cannot select a *different* value
+  per font id - only the map can. A translation that wants font 300 drawn
+  proportionally and font 0 fullwidth needs a map; the ini keys alone
+  apply the same choice to every id.
+- **Out of scope for now** (later work, per the plan): `[shadow]`,
+  `[glyphs]` remap ranges, `baseline=`, and `[hires] scale=` beyond what
+  the compositor already fixes. They are parsed - so a map that already
+  uses them for SCUMM does not warn on SCI - but not yet applied.
+  Per-glyph kerning/centring in proportional mode, GUI options for any of
+  this, scale 3, and the legacy SJIS face are also out of scope; see the
+  plan document's "Out of scope" list.
 
 ## 3. Data flow
 
@@ -477,6 +502,106 @@ since both rasterise the same face at the same size with 8-bit coverage.
   yet.
 - An empty value (`empty path`) or a directory (`is a directory`) gives
   exactly one warning and the `.uni` fonts; 0 px A/B.
+
+### 5.2 Which font id draws which text (Task 1, `hires_text_log`)
+
+`[measured]` A new diagnostic ini key, `hires_text_log` (game domain,
+bool, no scope predicate of its own - it works on English games too), logs
+one `debug(1, "hires_text: font %d line \"%s\" faces %s", ...)` line per
+rendered line, plus one aggregate line per `GfxText16::Box()` call, with a
+per-glyph tally of which face answered (`resource`/`legacy`/`unicode`/
+`latin`). Driven over the debug socket across KQ1-ko, LB1 and SQ1 VGA
+(English), a few screens into each (full logs and driver scripts:
+`runs/c4-fontids.md`):
+
+| Game | Text kind | Font id |
+|---|---|---|
+| KQ1-ko | Title/menu | 4 |
+| KQ1-ko | Dialogue box | 300 |
+| KQ1-ko | Status line / menu bar / parser echo | 0 |
+| LB1 (English) | Title/menu/status | 0 |
+| LB1 (English) | Dialogue box | 4 (also 1 for one message) |
+| SQ1 VGA (English) | Menu buttons | 0 |
+| SQ1 VGA (English) | Dialogue box | 4 |
+
+Font 0 is the status-line/menu-bar/parser-echo face in every game
+measured; font 4 is the dialogue-box face in both English games, but
+KQ1-ko's dialogue box is font 300 instead (its font 4 is the title-menu
+face) - confirming the plan's point that face choice is per font id and
+per game, not a fixed convention across games. This table is what the
+worked example in `HIRES_TEXT_MAP.md` is built on.
+
+### 5.3 The map, per-font settings and proportional Latin (Tasks 2-4)
+
+`[measured]` No map and no ini keys: KQ1-ko intro, **0 px** on all 4
+frames against `runs/baseline-4a0f7f0e1c/intro-ko`, reconfirmed after each
+of Tasks 2, 3 and 4 landed. Ini-only runs (`off`, `half`, fullwidth
+keep/space) also matched their pre-map captures byte for byte (all 28
+`.bin` files, each mode) once the map layer existed - the map adds, it
+does not change.
+
+`[measured]` **Map-driven equals ini-driven.** A `hires_text.map` naming
+the same face and `[latin] mode=fullwidth face=latin`, with *no* hires ini
+keys at all, reproduced the ini-driven fullwidth-keep capture with 0 of 28
+`.bin` files differing.
+
+`[measured]` **Per-font proof**, `gamedata/c4-perfont/hires_text.map`
+(`[hires] font=default`, `[fonts] default=`/`latin=` the two faces,
+`[latin] face=latin`, `[font.300] latin=fullwidth`, `[font.0] latin=half`)
+against the KQ1-ko tour: font 300 (dialogue) drew fullwidth ("ｘｙｚｚｙ"
+and fullwidth quotes, spaces kept), font 0 (status line, menu bar, parser
+echo) drew half-width on the same screen, and font 4 (no section) stayed
+off - three different Latin modes live at once from one map, each font id
+answering only for itself:
+
+![Dialogue box (font 300), fullwidth](img/hires_text_map/perfont-dialogue_crop.png)
+![Status line (font 0), half](img/hires_text_map/perfont-status_crop.png)
+
+Both faces (SD Gothic Neo, AppleGothic) were opened once each, although
+three font ids used them - confirming the TTF and Unicode-bundle source
+caches are keyed by (path, size[, Latin face, mode]), not by font id.
+
+`[measured]` **`latin=proportional`, `metrics=game` keeps layout
+identical to `off`.** Every `state()` text rect matched the `off` run
+exactly (intro: 4 states/24 rects, 0 differ; tour: 7 states/52 rects, 0
+differ), and the `hires_text_log` line texts were identical too, so line
+breaks did not move. This is the point of `metrics=game`: new glyphs,
+old geometry.
+
+`[measured]` **`metrics=font` changes every box**, because the layout now
+follows the TrueType face's own (narrower) advances, including on ASCII
+spaces (proportional routes `U+0020` to the face, like `half` does). Only
+one box actually re-wrapped to a different number of lines (font 300's
+`02d_unknown`); every other box kept its line count but narrowed, since a
+narrower Latin face setting needs a narrower box in most cases, not more
+lines. A map can mix the two per font id
+(`gamedata/c4-prop/hires_text.map`: `[latin] mode=proportional
+metrics=game`, `[font.300] metrics=font`): the resulting dialogue rows
+matched the metrics=font capture and the status rows matched the
+metrics=game capture, in the same run.
+
+![All five Latin modes, KQ1-ko font 300 dialogue box](img/hires_text_map/latin_modes.png)
+![All five Latin modes, KQ1-ko font 0 status line](img/hires_text_map/latin_modes_status.png)
+
+`[measured]` **A missing `[font.N] face=`** (`gamedata/c4-missing`,
+`[font.300] face=/nonexistent/Missing.ttf`) gave one warning and font 300
+fell back to the global face at its own size; nothing went blank.
+
+`[measured]` **English + a map is still out of scope**: one warning
+(`hires_text.map is ignored: the game's language has no hi-res CJK
+text`), and all 16 `.bin` files stayed byte-identical to the English
+baseline.
+
+`[measured]` `make test`: 505/505 after the SCUMM parser port, 518/518
+after the SCI extensions, 527/527 after the per-font-settings task, and
+535/535 after proportional Latin landed - each build's own count, cited
+in full in the task reports.
+
+**Known limits, carried forward rather than fixed here** (space for a
+future `space=` choice in proportional mode; metrics=game can look
+letter-spaced with a narrow face in a wide game cell; metrics=font can
+look cramped with a very narrow face): see "Known limits" in
+`HIRES_TEXT_MAP.md`.
 
 ## 6. Build order
 

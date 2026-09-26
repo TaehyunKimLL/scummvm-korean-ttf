@@ -23,3 +23,7 @@ stage/
 *.pgm
 *.png
 .DS_Store
+
+# 문서에 실제로 삽입되는 그림은 예외 (docs/i18n/img/**)
+!docs/i18n/img/
+!docs/i18n/img/**
