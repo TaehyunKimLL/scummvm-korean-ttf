@@ -22,12 +22,20 @@ this project.
 
 ## The layout
 
+**2026-09-26: one line.** `hires-text` was merged into `i18n` (merge
+`91cffbd25a`, both engines built together, 654 unit tests, SCI and SCUMM frames
+identical before and after at run time: `runs/merge-hires-report.md` in the
+harness repo). `hires-text` is frozen. Every card, SCUMM included, now opens
+its worktree off `i18n`.
+
 ```
 ~/work/scummvm/
-  repo/scummvm          the OLD line, branch hires-text, 103 commits of it.
-                        Kept for archaeology and for the user's test builds.
+  repo/scummvm          the OLD line, branch hires-text. FROZEN since
+                        2026-09-26: merged into i18n (91cffbd25a) and kept
+                        only as a record. No new work lands on it.
                         Its own .worktrees/ holds the old cards.
-  i18n                  the NEW line, branch i18n, cut from upstream/master.
+  i18n                  THE line, branch i18n, cut from upstream/master; it
+                        carries SCI and SCUMM hi-res text since the merge.
                         BASE ONLY. Build it to check the baseline; never edit.
   i18n/.worktrees/<id>  one per card. This is where work happens.
 ```

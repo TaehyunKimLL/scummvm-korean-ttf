@@ -1,5 +1,11 @@
 # The big-bang branch: what it would change, in what order, and what proves it
 
+> **Status 2026-09-26: §2 A (branch strategy) is superseded.** The work did not
+> continue on `hires-text`. A new line, `i18n`, was cut from upstream/master
+> (see `i18n/TREES.md`), and `hires-text` was merged into it (`91cffbd25a`) and
+> frozen as a record. The engine order (§4) and the proofs (§6) still apply,
+> on `i18n`.
+
 Written for card B0 (`t_7a5dbbf2`), which asks for a branch plan rather than
 an implementation: which branch, in what order, proving what. Engine read at
 `943cda2bcff` (branch `hires-text`), upstream at `c81c8695a44`, fork base
