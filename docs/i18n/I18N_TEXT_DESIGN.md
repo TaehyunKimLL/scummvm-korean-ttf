@@ -309,6 +309,12 @@ public:
 	/** Width of units [from, to). Default: sum of advance(). AGS overrides
 	 *  (outline, kerning); SCI and SCUMM use the default. */
 	virtual int width(const TextRun &run, uint32 from, uint32 to);
+	/** Width of [from, i+1) given widthSoFar = width of [from, i). fitLine()
+	 *  keeps a running width through it, so a line costs O(L) advance() calls.
+	 *  Default: widthSoFar + advance(cp(i)), unchanged for control units and
+	 *  combining marks. Non-additive metrics (AGS: outline, kerning) override
+	 *  it with width(run, from, i + 1). Not const, like advance()/width(). */
+	virtual int extend(const TextRun &run, uint32 from, uint32 i, int widthSoFar);
 };
 
 enum HangulBreak { kHangulBreakWord = 0, kHangulBreakAny = 1 };
