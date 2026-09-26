@@ -58,6 +58,7 @@
 
 ## Global Constraints
 
+- **Progress on the board:** every subagent (impl, review, re-review, fix, final-review) posts a start and an end comment on kanban card `t_b9e705c3` (board `scummvm`): `hermes kanban --board scummvm --author <role> comment t_b9e705c3 "[<role> T<n>] start: ..."` / `"... end: <status>; <commits>; <tests>; report <path>"`. A failing comment command is noted in the report, not fatal.
 - **Trees (`TREES.md`):**
   - Never edit `~/work/scummvm/i18n` (the base) or `~/work/scummvm/repo/scummvm`'s own checkout.
   - Nothing is checked out in the existing `c4-map` worktree.
