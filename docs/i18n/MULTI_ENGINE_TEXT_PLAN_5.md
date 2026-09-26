@@ -1,5 +1,7 @@
 # Unicode, TTF and 8-bit alpha text for SCUMM, AGS, Grim and Sword1/2 — Implementation Plan
 
+> **Superseded by `I18N_TEXT_PLAN_6.md` for T4/T5/T8/T10/T11** (card C11, `t_2780d454`, 2026-09-27). The user reframed the goal as an i18n environment - only the text is localised, and swapping the UTF-8 translation makes any language (Japanese, Thai, ...) render with the same engine code and map - so the Korean-specific shape of those tasks is replaced: T4 (SCUMM per-font/proportional) becomes plan 6 Task 6 with per-glyph metrics and combining marks; T5 (SCUMM UTF-8) becomes Task 7 with `<lang>.trs`, a body BOM (a `korean.trs` cannot begin with `EF BB BF`, it begins with `SCVMTRS `) and the shared layout stage; T8 (AGS map) becomes Tasks 3 and 8; T10 (Sword) is dropped; T11 (matrix) becomes Task 10 with ja/th columns. T1, T2 and T6 (merged) and T3, T7, T9 (running) stand as written. Design: `I18N_TEXT_DESIGN.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** the engines the Korean fan patches (`kortrs/`) need, beyond SCI, draw text from a TrueType face or an 8-bit coverage bitmap font, look glyphs up by Unicode code point, accept UTF-8 input, and keep reading the legacy CP949/EUC-KR files the patches ship. With no new key and no new file, every game stays byte-identical to upstream.
