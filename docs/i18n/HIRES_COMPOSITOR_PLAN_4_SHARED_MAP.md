@@ -9,7 +9,7 @@
 **Architecture:**
 - The parser changes are made **once**, on the SCI line: branch `wt/c5-parser`, cut from `wt/c4-map` (C4, open as PR #1 against `i18n`), worktree `~/work/scummvm/i18n/.worktrees/c5-parser`. They come with their tests.
 - The three shared files are then **copied byte-identically** onto the SCUMM line: branch `wt/c5-scumm-map`, cut from `hires-text` (`7b0a8c9899`), worktree `~/work/scummvm/repo/scummvm/.worktrees/c5-scumm`. The copy brings the C4 extensions to SCUMM as well (`[font.N]`, `[latin] mode=/space=`, the `[fonts]` name table, the key aliases). They are all additive, and SCUMM reads none of them.
-- On the SCUMM line, the adapter (`engines/scumm/hires_text.cpp`) is audited against the C4 parser field by field. The font baker's remap-target search is made linear, so that a large range cannot stall a bake.
+- On the SCUMM line, the adapter (`engines/scumm/hires_text.cpp`) is audited against the C4 parser field by field. The font baker's remap-target search becomes a hash lookup, so that a large range cannot stall a bake.
 - The docs are reconciled on both sides: the SCUMM guides in the engine repo, `HIRES_TEXT_MAP.md` and `HIRES_COMPOSITOR_DESIGN.md` §2.2 in the docs repo.
 
 **Decisions of 2026-09-26 (user, binding):**
@@ -87,6 +87,7 @@
   Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01HaZ452x9dK6wjToh3cZ3Cf
   ```
+- Every subagent posts a start and an end comment on kanban card t_b9e705c3 (board scummvm), format in the card's Protocol comment.
 - **No SCUMM game data exists on this Mac.** `gamedata/` holds SCI games only, and hpz2 is not reachable over ssh from here. Runtime SCUMM checks are Task 5: **optional, and run by the user**. Tasks 1–4 must not depend on them.
 
 ## Map syntax added by this plan
