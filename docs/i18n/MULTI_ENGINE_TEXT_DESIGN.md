@@ -466,3 +466,29 @@ Grim keeps its `.laf.txt` files. One new key: `text_encoding` (AGS, SCUMM): `aut
   card.
 - Data for 30minutes, Lamplight City, the Zak2 fan game and the original BS1
   CD.
+
+## 11. Measured: the C8 matrix (plan 5 T11, done by C11 T10)
+
+Plan 5's T11 (the matrix over groups A, C and D with and without the Korean
+trigger) was replaced by C11 T10, which ran it on the merged `i18n`
+`da78ab38fc` together with the Japanese and Thai columns. The table, runs
+and crop sheets are in `I18N_TEXT_DESIGN.md` §9; in short `[measured]`:
+
+- **Without the Korean trigger** (no translation, no map; the C6
+  invariant): SCUMM groups A and B IDENTICAL-PREFIX to upstream
+  `503d074778` or diverging only where upstream diverges from itself
+  (Indy3, Loom Towns); AGS 5 Days IDENTICAL to upstream; the 32-bit AGS
+  games (Blackwell 1-4, Primordia, Shardlight, Winter's Night, KQ1 VGA,
+  SQ2 VGA) differ from upstream from frame 1 because of C10's 32-bit
+  screen and are IDENTICAL to the pre-C11 `i18n` `6afdae3f3e`; Grim within
+  noise.
+- **With the Korean trigger** (the shipped patches): SCUMM group A with
+  hi-res off IDENTICAL to both upstream and the pre-C11 build (the C6
+  erase regression is gone since C7), the C6/C8 TTF and SVFN maps
+  IDENTICAL to the pre-C11 build; AGS `ags_say` crops of 5 Days (fonts 0-2),
+  Deception and Epiphany IDENTICAL to C11 T8 (and to C8 T7 in RGB565);
+  Grim `grim.ko.tab` within T9's noise floor.
+- **Found:** SCUMM v7 (Full Throttle) in a non-CJK language crashes at
+  start on every fork build since the hires-text line's
+  `peekGameCharsetHeight()` (`583aa2a8af`); upstream runs. Pre-C11, not a
+  C8/C11 change (`I18N_TEXT_DESIGN.md` §9.2).

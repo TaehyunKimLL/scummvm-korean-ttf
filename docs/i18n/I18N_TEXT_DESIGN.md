@@ -1,7 +1,7 @@
 # An i18n text environment: any language by swapping the translation
 
-Status: **design addendum, 2026-09-27, card C11 (`t_2780d454`). Not built.**
-Written against `i18n` at `bee83518ad` (C8 T1, T2, T6 merged; C8 T3, T7, T9
+Status: **built and merged, 2026-09-27: `i18n` `da78ab38fc` carries C11 T1-T9, T3b, T3c. The matrix on the merged build is §9 `[measured]`, what it does not do is §10.** Originally a design addendum, card C11 (`t_2780d454`);
+written against `i18n` at `bee83518ad` (C8 T1, T2, T6 merged; C8 T3, T7, T9
 and C10 running on their own worktrees). Its tasks are in
 `I18N_TEXT_PLAN_6.md`, which replaces plan 5's T4, T5, T8, T10 and T11.
 
@@ -747,3 +747,133 @@ so T4 extracts face 2.
    Sukhumvit works `[measured]`); the spacing-mark warning names the problem.
 7. **Upstream divergence**: `Common::Language` additions touch `common/`;
    kept to two appended entries.
+
+## 9. Measured: the C11 matrix on the merged `i18n` (T10) `[measured]`
+
+**Builds.** **b** = merged `i18n` `da78ab38fc` (`~/work/scummvm/i18n/scummvm`,
+everything of C11 T1-T9, T3b, T3c, C8 T3/T7/T9, C10, C12). **u/u2** =
+upstream `503d074778`. **r/r2** = the pre-C11 `i18n` `6afdae3f3e` (the last
+commit before C11 T1 merged; it has C10's 32-bit screen and C8 T6/T7), built
+for this matrix in `.worktrees/c11-ref-t10`. All configured
+`--enable-engine=scumm,scumm_7_8,sci,ags,grim --enable-freetype2`. Method:
+`runs/c6-tools/c6cap.sh` + `seqcmp.py` (distinct-frame sequences, IDENT =
+IDENTICAL-PREFIX), all runs of one row in parallel, frames deleted after
+hashing; SCI and AGS through the debug socket (`kq1_intro.py`,
+`kq1_tour.py`, `ags_say`). Runs and logs: `runs/c11/T10/` (harness repo),
+one `.txt` per row; the full report is `runs/c11/T10-report.md`. Where
+upstream cannot be the reference - C10 changes every 32-bit AGS game's
+frames, and upstream cannot load the Grim Korean data - the reference is
+the pre-C11 build **r**, and the row says so. Japanese and Thai text is
+**machine-produced sample text** (§5); no claim of translation quality.
+
+**`make test`** (`c11-t10-ft`/`c11-t10-noft` worktrees at `da78ab38fc`,
+`SCUMMVM_TEST_KORTRS`/`SCUMMVM_TEST_I18N_DATA` set): **884 tests OK with
+FreeType, 884 OK without** (`--disable-freetype2`; 17 FreeType-only tests
+report `TS_SKIP`, 1 with FreeType: the AGS `wfn_ext` real-data test finds no
+`5 Days a Stranger (Windows)/extfnt0.wfn` under `kortrs`). No build warning
+in C11 code; the three non-OpenGL warnings (`text16.cpp` `doubleByteMode`,
+`room.cpp` shadowing) are in the pre-C11 build too.
+
+### 9.1 Matrix
+
+| Row | none (C6 invariant) | ko legacy (vs r) | ko UTF-8 | ja | th |
+|---|---|---|---|---|---|
+| **SCI** KQ1 | frame-locked intro: 16/16 dumps = `baseline-4a0f7f0e1c/intro-en`, 20/20 = r. `c6cap` 40 s: b-u DIVERGE@117, u-u2 @116, r-r2 @116 (SCI timing; the fork differed from upstream before C11 too) | KQ1-ko intro **0 px** f1/f20/f45/f60 vs baseline, 28/28 dumps = r; tour 6/6 dumps 0 px (03_room2 716 px = the known stale-baseline moat; r 3176 px). LB1 Korean b-r IDENT 100/100 (r-r2 @98) | KQ1-ko is the UTF-8 case (`ADGF_UTF8I18N`): same as the legacy column | intro 4/4, tour 7/7, kinsoku reply 1/1 `_layer` dumps = T5; sheet `shots/c11/matrix/sci-kq1-ja.png` | differs from T5 by design (T3b: the face shrinks so marks fit); the marks reply = T3b fix1 1/1; `sci-kq1-th.png` |
+| **SCUMM** MI1 UTE | IDENT 161 vs u, u-u2 IDENT | hi-res off IDENT 162 (b-u and b-r); C6 TTF map IDENT 165 | `ko.trs` hi-res off = CP949 `korean.trs` IDENT 162/162; hi-res on DIVERGE@1 (per-glyph vs the CP949 cell: the T7 ruling), both = T7's own captures 165/165 | boot 117 IDENT 164/164 vs T7; opening 100 s timing-bound (b vs b2 DIVERGE@84; 322/362 unique frames shared with T7); `scumm-mi1-ja.png` | smaller than T7 by design (T3b); opening vs T3b fix1 @44 = b vs b2 @44; `scumm-mi1-th.png` |
+| SCUMM group A | MI2 IDENT 121, Indy4 IDENT 542, Loom CD IDENT 167, S&M IDENT 702; Loom Towns @749 = u-u2 @749; Indy3 noise (b-u @295, u-u2 @187, b-b2 @161..186) | MI2 123, Indy4 545, Loom CD 170, S&M 719 IDENT (b-u too); Indy3 noise (b-r @186, b-b2 @216); Loom Towns @252 = r-r2 @263 | - | - | - |
+| SCUMM group B | MM1 IDENT 220, MM2 395, Zak2 346; Zak Towns IDENT but for a second ScummVM splash (version string) late in the run: with it dropped, b-r 268/268 IDENT; **FT: see 9.2** | MM1 230, MM2 385, Zak2 347, FT 764 IDENT (b-u too); maps: svfn-ft 766, svfn-mm2 385, ttf-mm2 385, ttf-zak2 348 IDENT vs r | - | - | - |
+| **AGS** 5 Days | IDENT 58 vs u and r | `ags_say` fonts 0/1/2 crops IDENTICAL to T8 fix1 (= T8 round 0; font 2 = C8 T7 IDENTICAL-565) | - (no UTF-8 Korean `.tra` here) | 9/9 `ags_say` crops IDENTICAL to T8 fix1; `ags-5days-ja.png` | font 2 IDENTICAL; fonts 0/1 now smaller: the T3b fit reaching AGS after the merge (T8 fix1 logged `lacks ... U+0E39`; the merged build does not); `ags-5days-th.png`, before/after `ags-5days-th-t8-vs-merged.png` |
+| AGS C/D, 32-bit | Blackwell 1-4, Primordia, Shardlight, Winter's Night, KQ1 VGA, SQ2 VGA: DIVERGE@1 vs upstream (C10, pre-C11), **IDENT vs r** (442, 490, 286, 45, 406, 528, 486, 2, 2), r-r2 and u-u2 IDENT; Blackwell 5 IDENT 84 vs u (stalls on both) | Deception, Epiphany `ags_say` crops IDENTICAL to T8 fix1 (C8 crops IDENTICAL-565) | - | - | - |
+| **Grim** | 120 s TinyGL: the only early difference is a second ScummVM splash (version string, at the 640x480 switch); with it dropped b-u DIVERGE@525, b-b2 @435, u-r2 @434: noise | r cannot identify the Korean data (no fallback detection before T9), so vs T9's captures: DIVERGE@408, 1659/1666 unique frames shared = T9's noise floor (408) | unmeasured (no UTF-8 `grim.ko.tab`) | vs T9: @402, 1664/1670 shared (T9's own reruns @1144); `grim-ja.png` | vs T9: @220, 1667/1669 shared (T9's own reruns @220); `grim-th.png` |
+
+Korean legacy crops on one page: `shots/c11/matrix/ags-korean-legacy.png`.
+
+### 9.2 Findings
+
+1. **No C11 regression found.** Every row is IDENTICAL-PREFIX to its
+   reference or diverges exactly where the reference diverges from itself.
+2. **Full Throttle (and any SCUMM v7 game) crashes at start in a
+   non-CJK language on every fork build** - b, r and the C6 build
+   `91cffbd25a` alike; upstream runs (222 distinct frames in 30 s). Crash
+   report: `IMuseDigital::setAudioNames` on a null `_imuseDigital`, from
+   `ScummEngine_v7::readIndexBlock` <- `readIndexFile` <-
+   `peekGameCharsetHeight` <- `ScummEngine::init` (`scumm.cpp:1293`). The
+   fork's `peekGameCharsetHeight()` (commit `583aa2a8af` "SCUMM: Give a
+   non-CJK game a font height to scale against", hires-text line, before
+   C6) reads the index before iMuse Digital exists. The C6 runs used
+   `language=ko`, where `_useCJKMode` skips the peek, so C6 never saw it.
+   Pre-C11; needs its own card.
+3. **AGS Thai is drawn smaller after the merge.** T8 was built before T3b;
+   on the merged line the TrueType fit that keeps Thai below-base marks
+   inside the cell (T3b) applies to AGS fonts too, so 5 Days' fonts 0/1
+   draw Thai smaller and #225 now fits one line. Intended by T3b's ruling
+   ("Thai text gets smaller"); a map `size=` sets the size explicitly.
+4. **Grim Thai, sample #675** (`grim-th.png`, frame 675): a wrapped line
+   reaches the screen's right edge; it is not cut. Grim measures lines
+   with per-character kerned widths only (T9 concern 4).
+
+### 9.3 The `[unmeasured]` items of §4 and §8, resolved
+
+| Item | Result |
+|---|---|
+| §4.2 alfont with a negative `bitmap_left` | **clips and misplaces** Thai marks (T8, `shots/c11/5days-th-alfont-measure.png`); a UTF-8 translation with combining marks and an alfont TTF font logs a hint to name the fonts in a map |
+| §4.2 Grim with Sukhumvit | marks sit on their bases through `TTFFont`'s `xOffset`, right-aligned to the base stem, not GPOS-stacked (T9) |
+| §4.2 Vietnamese NFD | **still unmeasured**: no Vietnamese data |
+| §4.4 / §8.1 the fit and per-glyph advance for KQ1-ko | 0 px (T5, T3b and again here); per-glyph advance is gated on a translation, so legacy `.uni` widths are unchanged |
+| §4.4 start-up cost of the coverage sample | raster counts measured (MI1-th: 92 probe rasters within a budget of 96, T3b); milliseconds still unmeasured |
+| §8.3 SCUMM buffers | T7's buffer audit table; every buffer bounded on the UTF-8 path |
+| §8.4 `language=ja` on DOS MI1 | 28 `_language ==` sites listed, the reachable ones gated (T7) |
+| §8.5 SCI detection with a foreign `text.000` | KQ1 ja/th detect as the English entry, the manifest turns UTF-8 on (T5) |
+| §8.6 Thai quality without shaping | Sukhumvit correct, Thonburi warned (T5); ำ after a tone mark sits beside it, not stacked |
+
+## 10. Known limitations (as merged)
+
+What the merged line does **not** do, or does differently from this design;
+each was ruled on or accepted during T1-T9 (`progress.md` of plan 6):
+
+- **No shaping, no RTL, no dictionary breaking** (Out of scope). Thai
+  breaks between syllable-ish units and may split words; stacked marks are
+  placed by the face's bearings only (ำ after a tone mark sits beside it);
+  Thonburi-like faces that rely on shaping draw marks as spacing glyphs
+  (warned).
+- **Thai is drawn smaller** than the cell size asked for when the face is
+  fitted to the game's line (SCI, SCUMM, AGS without `size=`): about 0.75x,
+  so the marks fit the game's line pitch (T3b ruling). Game-px rounding
+  leaves small gaps in Thai on SCI (advances round to 2 hi-res px).
+- **UTF-8 Korean on SCUMM with hi-res on is spaced per glyph**, not on the
+  CP949 `.fnt` cell; it breaks lines where the CP949 bundle does (2000/2000
+  in the unit test) but is not pixel-identical (T7 ruling). Korean josa/verb
+  glue is not generalised: UTF-8 bundles drop the glue codes.
+- **SCUMM UTF-8 bundles** only on the v1-v6 PC renderers; HE, v7/v8,
+  FM-Towns, PCE, SegaCD, NES and Mac ignore one with a warning. Code points
+  above U+FFFF become U+FFFD; the game's own font draws every non-ASCII code
+  point as `?` when no face has it; untranslated game bytes that are not
+  valid UTF-8 pass through as the game's own glyph (U+F700 + byte).
+- **SCUMM `noteTranslatedString`** and the decoder share `escapeArgBytes`
+  (T3c); `FF <newline>` still ends a line differently in `textEnd` and
+  `scummTextLength` for Sega CD / Indy4-JA (unreachable with UTF-8).
+- **SCI:** the manifest rule means a stray `sci-<lang>.str` turns the UTF-8
+  path on for that language; Windows SCI1.1 and KQ6 hi-res take their own
+  driver with no text plane (the translation's glyphs are not shown, one
+  warning); PQ2's JA `\n` escape is not a newline for the UTF-8 layout;
+  faces of one chain are fitted separately (no shared baseline);
+  `[font.N] bitmap=` is parsed but unused on SCI.
+- **AGS:** the layout stage runs for a UTF-8 translation, an EUC-KR
+  translation or active map fonts; a `.tra` that fails to open still counts
+  as a translation (upstream quirk); the ini `hires_text_font` alone makes
+  the map fonts active; on AGS `[font.N] face=` beats `hires_text_font`
+  (SCI/SCUMM: the ini key wins); EUC-KR patches inherit the layout stage's
+  edge cases (emergency split, trailing spaces - their probes are
+  unchanged); characters a chain lacks fall back to the game font one at a
+  time (kerning lost); TTF + `extfntN` keeps the TTF's height.
+- **Grim:** no map, no chain and no coverage check (design §4.4 said
+  "warning only"; not implemented): one face per `.laf.txt`; the retail
+  game only; a forced language without its `grim.<lang>.tab` is not
+  identified at all, so the "missing table" warning is unreachable; UTF-16
+  official tables keep the old breaker; a UTF-8 `grim.ko.tab` is
+  unmeasured; OpenGL shaders unmeasured (no headless GL).
+- **TTC files** open face 0 only (extract others with `ttc2ttf.py`).
+- **Vietnamese** (`vi` is a language code now) has no sample data; NFD
+  diacritic stacking is unmeasured.
+- **Pre-C11, found here:** SCUMM v7 in a non-CJK language crashes at start
+  (§9.2 item 2).
