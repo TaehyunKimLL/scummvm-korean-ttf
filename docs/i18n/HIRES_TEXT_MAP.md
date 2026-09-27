@@ -1,11 +1,25 @@
 # `hires_text.map`: a translator's and font-pack author's guide
 
-This is the file a Korean/Japanese/Chinese SCI translation or a hi-res
-font pack ships to control how ScummVM's SCI engine draws replacement
-(TrueType) text over a game's own bitmap fonts. It is read by SCI16 games
-in a CJK code page only (Windows 949/932/936/950), below SCI2 - the same
-scope as the `hires_text_font` ini key. On any other game the map is
-ignored, with one warning.
+This is the file a translation or a hi-res font pack ships to control how
+ScummVM draws replacement (TrueType or SVFN) text over a game's own bitmap
+fonts. The same file and the same parser serve every engine that has the
+path (C11, `I18N_TEXT_DESIGN.md`); what each engine reads is in its own
+section below:
+
+- **SCI16** (below SCI2): when the game's text is a UTF-8 translation
+  (`sci-<lang>.str` present, or the KQ1-ko detection entry) or a legacy CJK
+  code page (949/932/936/950) - the same scope as the `hires_text_font` ini
+  key. On any other SCI game the map is ignored, with one warning.
+- **SCUMM** v1-v6 with the hi-res text layer on.
+- **AGS**, when the game directory has `hires_text.map` or the ini names
+  one (`hires_text_map=`).
+- **Grim** does not read the map: a translation names one face per game
+  font in `<font>.laf.txt` (see "Localising a game with a UTF-8 text file"
+  below).
+
+Anyone localising a game should start at "Localising a game with a UTF-8
+text file" and "One map, three languages"; the rest of the page is the
+reference.
 
 For the surrounding architecture (the text compositor, the TextLayer, why
 this exists at all) see `HIRES_COMPOSITOR_DESIGN.md`. This page is only
@@ -46,6 +60,129 @@ the game directory's own `hires_text.map` that is the game directory; for
 a map named by `hires_text_map=` elsewhere, fonts can sit beside that map.
 The ini keys `hires_text_font` and `hires_text_latin_font` are not map
 paths: they are used exactly as given, as they always were.
+
+## Localising a game with a UTF-8 text file
+
+Since C11 (`I18N_TEXT_DESIGN.md`) the engines below take a translation as
+**UTF-8 text in a file named by the language code**, and draw it in any
+script the fonts cover - Korean, Japanese, Thai - with the same engine code
+and the same map. Only the text file changes between languages. The
+language is the one the player picks (`language=` in the game's ini domain
+or `--language=`); its code is ScummVM's (`ko`, `ja`, `th`, `vi`, ...).
+Korean fan patches in their old formats (CP949 `korean.trs`, EUC-KR
+`korean.tra`, CP949 `grim.ko.tab`, the SCI `.uni` bundle) keep working as
+before; they are legacy formats, not the model for a new translation.
+
+| Engine | Text file(s) | What marks it UTF-8 | Fonts |
+|---|---|---|---|
+| **SCI16** | the game's TEXT resources as `text.NNN` patch files with UTF-8 strings (`harness/i18n/m12mkpatch.py`), plus `sci-<lang>.str` for strings compiled into scripts (`SCRIPT_STRINGS.md`) | **`sci-<lang>.str` present for the chosen language** - the manifest; it may hold only comments when no script string needs translating. KQ1-ko is also recognised by its detection entry | `hires_text.map` in the game directory: `[hires] face=` (a chain), per font id `[font.N]`; then an optional `.uni` bundle; then the game's font |
+| **SCUMM** v1-v6 (PC renderers) | `<lang>.trs` (`ja.trs`, `th.trs`, `ko.trs`; Korean also finds the legacy `korean.trs`) - the `SCVMTRS` bundle with UTF-8 strings (`harness/i18n/c11/mktrs.py` writes one on an existing bundle's index) | **`EF BB BF` at the start of the string body** (after the room table; the file itself starts with `SCVMTRS `), or ini `text_encoding=utf8`. An unmarked body that looks like UTF-8 logs one hint | `hires_text.map`: `[hires] face=` chain, `[font.N]` per charset, `[font.N] bitmap=` SVFN; after the chain, the game's charset (which draws non-ASCII characters as `?`) |
+| **AGS** | `<name>.tra` compiled from the AGS editor's `.trs` (`harness/i18n/c11/mktra.py` writes one without the editor), selected by `[language] translation=` in `acsetup.cfg` or `--language=` | the `.tra`'s own `ext_sopts` option **`encoding=utf-8`** (upstream AGS). Without it, a file named `korean` is read as EUC-KR (legacy) | `hires_text.map` (see "AGS (C11 T8)"): `[font.N] face=` chains or `[font.N] bitmap=` SVFN per AGS font; otherwise the game's own fonts |
+| **Grim** (retail, not remastered) | `grim.<lang>.tab` beside `GRIM.TAB`, same keys (`harness/i18n/c11/mkgrimtab.py`); the data dir needs `gfupd101.exe` | **`EF BB BF` as the file's first bytes** (text starts at byte 3). Without it, `grim.ko.tab` is the legacy CP949 table | one `<font>.laf.txt` per game font, one line `"<face file> <N>px"` (e.g. `ComicSans18.laf.txt`: `hiragino-w3.ttc 17px`); no chain, no map |
+
+What to expect, and what to check:
+
+- **Detection.** SCI and SCUMM detect the original game as before. Grim
+  with a forced language whose `grim.<lang>.tab` exists is accepted by a
+  fork-only fallback detection; without the file the game is not
+  identified at all. AGS needs nothing.
+- **Fonts: one map for every language.** Name the faces once as a chain,
+  `face=ko, ja, th`; each character is drawn by the first face that has it
+  ("One map, three languages" below). A TTC file opens its face 0 only:
+  extract another face first (`harness/i18n/c11/ttc2ttf.py`). For Thai
+  choose a face whose marks have zero advance and a negative bearing
+  (Sukhumvit Set; **not** Thonburi, which needs shaping).
+- **Coverage warnings.** With a UTF-8 translation, SCI, SCUMM and AGS
+  sample 64 of the translation's own characters and check every face of
+  the chain: one warning per face, e.g.
+  `hires text: <face> lacks 54 of 54 sampled characters of the translation
+  (U+0E01 U+0E02 ...); they fall back to the game's font`, and
+  `hires text: <face> draws combining marks as spacing glyphs (it needs
+  shaping); choose a face with zero-width marks, e.g. Sukhumvit Set`. A
+  warning that names the last face means those characters will not show.
+  Grim does not check coverage and has no fallback face: a character
+  its face lacks is drawn as that face draws a missing glyph.
+- **Line breaking** is the shared rule set: at spaces, before and after
+  kana/kanji (kinsoku: no line starts with `。` `」` and similar, none ends
+  with `「`), between Thai syllables (no dictionary; a word may be split),
+  never inside a character with its marks. `[layout]` in the map changes
+  the defaults (`hangul=word|any`, `kinsoku=on|off`, `thai=on|off`). Grim
+  has no map and so always uses the defaults.
+- **Size.** Thai stacks marks above and below the base, taller than a
+  Latin or Hangul line. When the face is fitted to the game's line cell
+  (SCI, SCUMM, and AGS without `size=`), it is opened smaller so the marks
+  fit (about 0.75x); a map `size=` sets the size explicitly.
+- **Not supported:** right-to-left scripts, scripts that need shaping
+  (Arabic, Indic), dictionary line breaking (Thai words may split),
+  typing translated text into the game's parser.
+
+## One map, three languages
+
+One `hires_text.map`, shipped once, serves a Korean, a Japanese and a Thai
+translation of the same game. Swapping the translation file is the only
+change; the map is not edited. This is the map the C11 captures used
+(`harness/i18n/c11/maps/universal.map`; macOS system paths, for testing -
+ship your own faces beside the map and name them relative to it):
+
+```ini
+[hires]
+; a chain: each character is drawn by the first face that has it
+face=ko, ja, th
+
+[fonts]
+ko=/System/Library/Fonts/AppleSDGothicNeo.ttc
+ja=/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc
+; face 2 ("Text") of SukhumvitSet.ttc, extracted: a .ttc opens face 0 only
+th=sukhumvit-text.ttf
+```
+
+With a Japanese translation, kana and kanji that AppleSDGothicNeo has are
+drawn by it, and the rest fall through to Hiragino (the coverage check
+logs how many: "AppleSDGothicNeo.ttc lacks 6 of 63 ... they fall back to
+ヒラギノ角ゴシック W3.ttc"). Put `ja` first to have Japanese drawn by the
+Japanese face. With the Thai translation both CJK faces lack every Thai
+character and Sukhumvit draws them. The same file works on:
+
+- **SCI** (KQ1): as is.
+- **SCUMM** (MI1 UTE): the C11 captures add `scale=2` and `alpha=true` to
+  `[hires]` (without a scale the text is drawn at 8 px), and a game whose
+  charsets differ in height should give sizes per charset with
+  `[font.N] size=`.
+- **AGS** (5 Days a Stranger): add `[font.0]`, `[font.1]`, `[font.2]`
+  sections with the same `face=ko, ja, th`, or rely on `[hires] face=`,
+  which AGS also applies to fonts without a section.
+
+Per-engine captures of this map with the three translations are in
+`I18N_TEXT_DESIGN.md` §9.
+
+### Face chains, `[font.N] bitmap=` and `[layout]` (every engine)
+
+- **`face=` is a face or a comma-separated chain**, in `[hires]` and in
+  `[font.N]` (`font=` is the same key). Each entry is a `[fonts]` name or
+  a path (relative paths are the map's own).
+- **The bare-name rule.** A value **without a comma** is one face, taken
+  as a `[fonts]` name or else as a path, as before chains existed - so
+  `face=Osaka` alone opens a file called `Osaka` in the map's directory.
+  **Inside a chain** an entry that is not a `[fonts]` name counts as a
+  path only if it contains `/`, `\` or `.`; a bare extension-less name
+  there (`face=ko, Osaka`) is dropped with one warning ("[hires] face
+  'Osaka' is no [fonts] name and no path, dropping it from the chain"),
+  and an empty entry (`face=ko,,ja`) is skipped with one warning. Name
+  faces in `[fonts]` and chain the names.
+- **After the chain** comes the engine's own fallback: SCI the `.uni`
+  bundle (presented in the chain's cell), then the game's font; SCUMM the
+  game's charset; AGS the game's own font N, character by character.
+- **Faces in one chain are fitted separately**, each to the same cell;
+  two faces on one line may not share a baseline exactly.
+- **`[font.N] bitmap=`** names an SVFN font for font/charset N, relative
+  to the map. SCUMM tries it before the faces; AGS draws it instead of any
+  face. SCI parses the key but does not use it.
+- **`[layout]`** (optionally `[layout:<gameid>]`): `hangul=word|any`,
+  `kinsoku=on|off`, `thai=on|off`. Defaults: SCI `word/on/on`, SCUMM
+  `any/on/on` (the Korean patches' own rule), AGS `word/on/on`. An unknown
+  key or a bad value is one warning and keeps the default. It applies to a
+  UTF-8 translation (and, on AGS, to EUC-KR text and to map fonts); legacy
+  code-page text keeps the engine's own breaker.
 
 ## A complete, worked example: KQ1-ko
 
@@ -273,6 +410,28 @@ With a UTF-8 translation, each face is checked against 64 of its code points
 game fonts are TTFs drawn by alfont gets one hint to add a map: alfont clips
 the marks above the line and places them after their base.
 
+Details worth knowing on AGS (C11 T8 review, `[source]` in
+`engines/ags/shared/font/hires_font_plan.cpp` and
+`engines/ags/engine/ac/translation.cpp`):
+
+- **The face order is `[font.N] bitmap=` > `[font.N] face=` > ini
+  `hires_text_font` > `[hires] face=` > `[fonts] default=`.** So on AGS,
+  unlike SCI and SCUMM, a map's own `[font.N] face=` beats the ini key.
+  The unit tests pin each step alone and `[fonts] default=` alone; the
+  pair `[hires] face=` + `[fonts] default=` in one map is not covered by a
+  test (the code takes `[hires] face=`).
+- **What turns the map fonts on** (and with them the shared line
+  breaking of UTF-8 text): a map with any `[font.N]` section, a non-empty
+  `[hires] face=`, or `[fonts] default=` - **or the ini key
+  `hires_text_font` alone, with no map at all**. A native UTF-8 game (no
+  translation) with only that ini key therefore breaks its lines with the
+  shared stage, not AGS's own loop.
+- **A `.tra` that fails to open still counts as "a translation is
+  loaded"** for that gate: AGS sets the translation name before it opens
+  the file and does not clear it on failure (upstream behaviour, kept).
+  Only a native UTF-8 game is affected (it then breaks lines with the
+  shared stage); an ASCII game is not, and its text is unchanged.
+
 ### `[glyphs]` ranges
 
 A range remaps or keeps many codes in one line, instead of one `[glyphs]`
@@ -332,7 +491,7 @@ The exact warning text for each bound and for the table limit is in
 
 | ini key | Overrides |
 |---|---|
-| `hires_text_font` | The face path, for every font id (beats `[font.N] face=` too, not only `[fonts] default`/`[hires] font=`) |
+| `hires_text_font` | The face path, for every font id. On **SCI and SCUMM** it beats `[font.N] face=` too, not only `[fonts] default`/`[hires] font=`. On **AGS** it does not: `[font.N] bitmap=` and `[font.N] face=` win over it, and it wins over `[hires] face=` and `[fonts] default=` (see "AGS (C11 T8)"). On AGS the key alone (no map file) also turns the map-font renderer on, and with it the shared line breaking of UTF-8 text |
 | `hires_text_font_size` | The size, for every font id (8..64) |
 | `hires_text_latin` | The Latin mode (`off`/`half`/`fullwidth`/`proportional`), for every font id |
 | `hires_text_latin_font` | The Latin-range face, for every font id |

@@ -163,9 +163,33 @@ The dump makes that a mechanical step, not a translation step.
 
 ## Gates
 
-The table is loaded whenever `sci-<lang>.str` exists for the detected
-language (`sci.cpp:316`), and is consulted regardless of language. Whether
-the translated text is then *decoded* as UTF-8 is decided separately by
-`heapStringsAreUtf8()`, which is currently true only for `KO_KOR`. A
-`sci-ja.str` would load and be looked up, and its UTF-8 would be walked as
-Shift-JIS. See `DESIGN.md` §"Open: the gates name Korean again".
+The table is loaded whenever `sci-<lang>.str` exists for the chosen
+language (`sci.cpp`), and is consulted regardless of language.
+
+**The file is also the translation's manifest (C11 T5, the manifest rule).**
+Whether the game's text is *decoded* as UTF-8 is decided by
+`heapStringsAreUtf8()`, and since C11 that is no longer a language test:
+
+```cpp
+// sci.cpp, once at start:
+_utf8Manifest = ConfMan.hasKey("language") && _scriptStrings.isPresent();
+
+bool SciEngine::heapStringsAreUtf8() const {   // asked per character
+	if (_textOverlay.isLoaded())
+		return false;                           // legacy CP949 Text.MAP overlay
+	return (_gameDescription->flags & ADGF_UTF8I18N) || _utf8Manifest;
+}
+```
+
+`isPresent()` means the file was found and parsed, **with or without
+entries**, so a translation whose scripts need no string ships a
+comments-only `sci-<lang>.str` and still turns the UTF-8 path on (a
+comments-only file no longer warns "malformed"). The decision is taken once
+at start. A launcher-added game always has `language=`, so in practice the
+file alone decides: `sci-ja.str` makes the `text.NNN` patches and the table
+UTF-8 Japanese, `sci-th.str` UTF-8 Thai, with no code in the engine naming
+either language. A stray `sci-en.str` beside an English game turns the path
+on too - name the file for the language the translation is in. The old
+sentence here, "currently true only for `KO_KOR`", described the code before
+C11; the `DESIGN.md` open item "the gates name Korean again" is closed by
+this rule (`I18N_TEXT_DESIGN.md` §4.1).
