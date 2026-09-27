@@ -87,3 +87,37 @@ git branch -d wt/<short-name>
 `~/work/scummvm/harness/i18ntrees.sh` fails when the base is dirty, when two
 worktrees are on the same branch, or when a worktree's build points at another
 tree's binary. Run it before opening a card and before believing a measurement.
+
+## C11 (2026-09-27): the `wt/c11-*` branches are merged and gone
+
+Every C11 task branch was merged into `i18n` with `git merge --no-ff`
+after review and the invariant runs (the C8 ledger's standing ruling), its
+worktree removed and the branch deleted. None is left locally or on the
+remote; the merge commits are the record:
+
+| Merge on `i18n` | Branch | C11 task |
+|---|---|---|
+| `fffc7c12f8` | `wt/c11-glyph-model` | T1 Unicode properties, per-glyph metrics, `TH_THA`/`VI_VNM` |
+| `591c28a379` | `wt/c11-layout` | T2 shared layout stage on code points |
+| `0c055ff327` | `wt/c11-map-coverage` | T3 map face chains, `[font.N] bitmap=`, `[layout]`, coverage |
+| `ab23d34c32` | `wt/c11-scumm-metrics` | T6 SCUMM per-glyph metrics, per-charset faces |
+| `6ef770b7d5` | `wt/c11-sci` | T5 SCI language-neutral text |
+| `8c429b035e` | `wt/c11-scumm-utf8` | T7 SCUMM UTF-8 `<lang>.trs` |
+| `e5759a8e70` | `wt/c11-thai-fit` | T3b Thai below-base marks and the TrueType fit |
+| `3b06411178` | `wt/c11-grim` | T9 Grim `grim.<lang>.tab` |
+| `1c23b1ee32` | `wt/c11-t3c` | T3c stacking-mark gate, SCUMM coverage escapes |
+| `da78ab38fc` | `wt/c11-ags` | T8 AGS UTF-8 translations, map fonts, shared wrapping |
+
+Interleaved on the same line: C10 `404b8aff50` (32-bit SurfaceSDL
+screen), C8 T7 `6afdae3f3e`, C8 T9 `fb18b10ec2`, C8 T3 `8ffcbb540c`, C12
+`89c7ae7316`. T10 (the matrix and these docs) had no engine branch: it
+measured the merged `i18n` `da78ab38fc` from scratch worktrees that were
+removed afterwards (`c11-ref-t10` = `6afdae3f3e`, the last `i18n` commit
+before C11 merged, with C10; `c11-t10-ft`/`c11-t10-noft` = `da78ab38fc`
+for `make test` with and without FreeType).
+
+Worktrees still present under `i18n/.worktrees/` are reference builds
+only, not open cards: `c6-test` (`91cffbd25a`, the C6 i18n build),
+`c6-bis-good`/`c6-bis-bad` (the C6 SCUMM bisect pair) and `c8-ref`
+(`3741a11e83`). The upstream reference is
+`repo/scummvm/.worktrees/c6-upstream` (`503d074778`).

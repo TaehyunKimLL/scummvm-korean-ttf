@@ -8,6 +8,8 @@
 
 **Card:** C11, kanban `t_2780d454` (board `scummvm`).
 
+**Status: complete (2026-09-27).** Tasks 1-9, 3b and 3c are merged into `i18n` (last merge `da78ab38fc`, `TREES.md`); Task 10's matrix on the merged build is `I18N_TEXT_DESIGN.md` §9 `[measured]` (no C11 regression; 884 unit tests with and without FreeType) and its known limitations §10. Docs updated by Task 10: `I18N_TEXT_DESIGN.md`, `HIRES_TEXT_MAP.md` (translator's guide, chains, one map for three languages, the AGS key order), `SCRIPT_STRINGS.md` (the manifest rule), `MULTI_ENGINE_TEXT_DESIGN.md` §11, `TREES.md`. Report: `runs/c11/T10-report.md` (harness repo).
+
 **Architecture:**
 - Shared, engine-free (`graphics/hires_text/`): Unicode properties and per-glyph metrics with combining marks (Task 1); the layout stage — decode once to a code-point `TextRun`, break and measure there, map back to bytes (Task 2); the map's face chains, `[font.N] bitmap=`, `[layout]`, and the coverage check that replaces `requireHangul` (Task 3).
 - Test data for Japanese and Thai, generated in the harness (Task 4), in parallel with Tasks 1-3.
