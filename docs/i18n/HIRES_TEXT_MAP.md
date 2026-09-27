@@ -393,6 +393,26 @@ the gaps it had above 1 px. Engine-side detail:
 `engines/scumm/HIRES_TEXT_DECORATIONS.md` and `graphics/hires_text/README.md`
 ("Decoration (C19)").
 
+### Heavier text: a heavier face, or `[hires] gamma=` (C20)
+
+Thin faces look grey once text is blended over an outline (MI2 Korean in
+Apple SD Gothic Neo Regular). Prefer a heavier face: on macOS,
+AppleSDGothicNeo.ttc face 6 is Bold, which C20 measured as the best
+default for Korean (mean text level 190 against Regular's 171, and dense
+syllables such as 췄 떡 밥 stay open). Until a map can name a face inside
+a `.ttc` (card C21), extract it with
+`harness/i18n/c11/ttc2ttf.py /System/Library/Fonts/AppleSDGothicNeo.ttc 6 sdgothic-bold.ttf`
+and point `ko=` at the file. Apple's fonts may not be redistributed, so
+this is for local maps.
+
+For a script whose only face is light, `[hires] gamma=` (0.5 to 4, default
+1 = off) raises TrueType coverage as `255 * (c/255)^(1/gamma)` when a glyph
+is rasterised; coverage below 4 is left alone. It applies to the whole face
+chain on SCUMM, SCI and AGS; Grim and SVFN or baked bitmap fonts ignore it.
+Outlines widen with the body (about +0.23 px at 2.2), and on a keyed
+(8-bit) screen more pixels cross the ink cut, so keyed text gets heavier.
+Omitting the key leaves every existing map byte-identical.
+
 ### SCI with a UTF-8 translation (C11 T5)
 
 On SCI16 the map (and the `hires_text_*` ini keys) apply when the game's

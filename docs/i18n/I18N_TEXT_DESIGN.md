@@ -322,7 +322,7 @@ enum HangulBreak { kHangulBreakWord = 0, kHangulBreakAny = 1 };
 struct BreakRules {
 	HangulBreak hangul;       ///< word: Hangul breaks at spaces (like Latin); any: like CJK ideographs
 	bool kinsoku;             ///< apply the shared kinsoku table (§4.3)
-	bool thaiFallback;        ///< break before Thai bases (§4.3)
+	bool thaiFallback;        ///< Thai syllable-segment breaks (§4.3, C16)
 	BreakRules() : hangul(kHangulBreakWord), kinsoku(true), thaiFallback(true) {}
 };
 
@@ -354,6 +354,15 @@ void breakLines(const TextRun &run, int maxWidth, LayoutMetrics &m, const BreakR
 where the next begins); `breakLines()` is AGS's and Grim's; SCUMM's
 `addLinebreaks()` calls `fitLine()` repeatedly and writes its own `0x0D`
 at `byteEnd` (the existing space-replacement or `memmove` insert).
+
+The legacy (CP949) Korean path of `addLinebreaks()` inserts its breaks with
+`insertLinebreak()` (C13): the string length grows by one per insert and an
+insert that would run past the caller's buffer is refused (the line then
+breaks at its last space, or stays long). Before C13 the second insert
+overwrote the terminating NUL and the third dropped the last character;
+legacy frames changed only for lines with two or more inserts, which were
+corrupt before. The same fix is prepared for upstream
+(`runs/c13/upstream.patch`, not sent).
 
 ### 3.3 Escapes that must survive decoding
 
@@ -544,13 +553,22 @@ One rule set, by **character class**, not by the language setting
 4. **Ideographic** (`kUnitWide`): a break is allowed before and after any
    wide unit (kanji, kana, fullwidth forms, CJK punctuation; Hangul only when
    `rules.hangul == kHangulBreakAny`).
-5. **Thai fallback** (`rules.thaiFallback`): allowed before `b` when
-   `isThaiBase(b)`, `a` is Thai (or a mark on Thai), not
-   `isThaiLeadingVowel(a)`, and `b` is not a following vowel (U+0E30,
-   U+0E32, U+0E33, U+0E45). This breaks between
-   syllable-ish units, not words; it never leaves a mark or a leading vowel
-   stranded. Words may be split: acceptable for the first pass; dictionary
-   breaking (ICU `th` word list) is the future.
+5. **Thai syllable segments** (`rules.thaiFallback`, C16): inside a Thai
+   run a break is allowed only between syllable-ish segments. The segmenter
+   (`isThaiSegmentStart()`) needs no dictionary: it starts from Thai
+   Character Clusters (never after เ แ โ ใ ไ; never before a mark, a
+   following vowel, ๆ or ฯ; never inside the spelled vowels เ-ือ, เ-ีย, ัว,
+   ออ, รร) and merges clusters into syllables by final consonants, initial
+   pairs (กร หม อย …), silent letters under ์ and inherent-vowel syllables.
+   Every break it allows is also a TCC boundary, so a wrong guess only moves
+   the break to another cluster edge. ๆ never starts a line, even after a
+   space; ฯ may after a space (the title ฯพณฯ). Segments are cached per
+   decoded run (1 byte per unit), so a line lays out in linear time. On the
+   1878 KQ1-th strings at widths 13-40 the breaks that fall inside a
+   syllable went from 18952 to 1481; what is left needs a dictionary
+   (เด|เวนทรี, ตอบส|นอง; the known misreads are in runs/c16/report.md).
+   Dictionary breaking (ICU/libthai word lists) is the next step. Lao keeps
+   no rule of its own yet.
 6. Otherwise no opportunity (Latin letters inside a word, Hangul under
    `word`).
 
