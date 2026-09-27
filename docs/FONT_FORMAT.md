@@ -126,7 +126,15 @@ python3 scripts/mkfont.py NanumGothic.ttf out.fnt --size 24 --bpp 8 --variable
 
 # 일본어
 python3 scripts/mkfont.py misaki.ttf out.fnt --size 16 --codepage 932
+
+# 코드 포인트 목록 (버전 2, cmap): 타이처럼 결합 부호가 있는 문자는 이것으로
+# 굽는다. 가변폭이고 flags 비트 2 를 세운다 (3절)
+python3 scripts/mkfont.py sukhumvit-text.ttf th.fnt --size 24 --bpp 8 \
+        --unicode 0E01-0E3A,0E3F-0E5B,0020-007E
 ```
+
+`scripts/test_mkfont.py` 가 타이 SVFN 을 구워 결합 부호의 펜 위치와 음의
+bearing, 그리고 "ที่" 를 조립했을 때 부호가 글꼴이 놓는 자리에 오는지를 본다.
 
 굽는 쪽이 FreeType 을 쓰므로, 게임을 돌리는 빌드에는 FreeType 이 없어도
 된다. 이것이 이 포맷의 존재 이유다.
