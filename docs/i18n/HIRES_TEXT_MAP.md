@@ -213,6 +213,45 @@ the same warning on an SCI map as it would on a SCUMM one (see "Warnings
 to expect" below). SCI just does not act on the resulting table yet: every
 game still draws its own glyphs for the codes a `[glyphs]` section covers.
 
+### SCI with a UTF-8 translation (C11 T5)
+
+On SCI16 the map (and the `hires_text_*` ini keys) apply when the game's
+text is a **UTF-8 translation** or the game is in a legacy CJK code page
+(949/932/936/950); the game's language does not decide it. A UTF-8
+translation is recognised by:
+
+- a detection entry marked UTF-8 (KQ1-ko), or
+- **`sci-<lang>.str` present in the game directory for the chosen
+  language** - the translation's manifest; it may hold only comments.
+  The rule also asks for `language=` in the game's ini domain, but a game
+  added through the launcher always has one (the detected language), so
+  in practice **the manifest alone decides**: a stray `sci-en.str` beside
+  an English game turns the UTF-8 path on for it. Name the file for the
+  language the translation is in, and set `language=` to that language.
+
+With a translation loaded:
+
+| Key | SCI |
+|---|---|
+| `[hires] face=`, `[font.N] face=` | a face or a comma-separated chain; the first face with the character draws it, then the `.uni` bundle (presented in the faces' cell), then the game's font. Each face is checked against 64 of the translation's code points: one warning per face naming what it lacks, or that it draws combining marks as spacing glyphs |
+| `[hires] size=`, `[font.N] size=` | as before; font ids with the same chain at different sizes get separate chains |
+| `[layout] hangul=`, `kinsoku=`, `thai=` | line breaking of the translation: defaults `word`, `on`, `on` (SCI always broke Hangul at spaces) |
+
+Glyphs beyond ASCII are placed by their own metrics: a glyph the face keeps
+in two cells (Hangul, kana, kanji) keeps the cell rule, a combining mark
+advances 0 and is drawn against the previous base, any other glyph
+advances by the face's own advance. A game **without** a translation (a
+legacy Korean or Japanese release, a `.uni` bundle) keeps the cell widths
+of its fonts to the pixel.
+
+**Where there is no text plane.** The UTF-8 path needs the upscaled
+graphics driver (the text plane). The driver table still matches platform
+rows first, as it does for Korean today: a UTF-8 translation of a Windows
+SCI1.1 release, or of KQ6 on DOS with hi-res graphics on, takes that
+platform's own driver, which has no text plane - its glyphs are not shown
+(one warning: "the graphics driver for this game ... does not composite
+the text layer"). Use the DOS release, or turn hi-res graphics off.
+
 ### `[glyphs]` ranges
 
 A range remaps or keeps many codes in one line, instead of one `[glyphs]`
