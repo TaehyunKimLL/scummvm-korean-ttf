@@ -393,17 +393,37 @@ the gaps it had above 1 px. Engine-side detail:
 `engines/scumm/HIRES_TEXT_DECORATIONS.md` and `graphics/hires_text/README.md`
 ("Decoration (C19)").
 
+### A face inside a font collection: `path.ttc#N` (C21)
+
+Any TrueType path a map names (`[fonts]`, `[hires] face=`, `[font.N] face=`,
+SCUMM's `hires_text_font`) may end in `#N` to pick face N of a `.ttc`/`.otc`
+collection. A file whose full name exists is used as it is, so a literal `#`
+in a file name still works; otherwise the digits after the last `#` of the
+file name pick the face (0..65535), and relative paths still resolve against
+the map. A face the file does not have gives a warning and is skipped like a
+missing file, and the chain carries on. Size fitting, the coverage check and
+every glyph use the chosen face. Works on SCUMM, SCI and AGS; Grim font
+descriptors name files inside the game and do not take it.
+
+Face numbers on macOS: AppleSDGothicNeo 0 Regular, 2 Medium, 4 SemiBold,
+6 Bold; SukhumvitSet 0 Thin, 2 Text; Hiragino Sans W3 is face 0 of its file.
+No extraction step (ttc2ttf.py) is needed any more.
+
 ### Heavier text: a heavier face, or `[hires] gamma=` (C20)
 
 Thin faces look grey once text is blended over an outline (MI2 Korean in
 Apple SD Gothic Neo Regular). Prefer a heavier face: on macOS,
 AppleSDGothicNeo.ttc face 6 is Bold, which C20 measured as the best
 default for Korean (mean text level 190 against Regular's 171, and dense
-syllables such as 췄 떡 밥 stay open). Until a map can name a face inside
-a `.ttc` (card C21), extract it with
-`harness/i18n/c11/ttc2ttf.py /System/Library/Fonts/AppleSDGothicNeo.ttc 6 sdgothic-bold.ttf`
-and point `ko=` at the file. Apple's fonts may not be redistributed, so
-this is for local maps.
+syllables such as 췄 떡 밥 stay open):
+
+```ini
+[fonts]
+ko=/System/Library/Fonts/AppleSDGothicNeo.ttc#6
+th=/System/Library/Fonts/Supplemental/SukhumvitSet.ttc#2
+```
+
+Apple's fonts may not be redistributed, so this is for local maps.
 
 For a script whose only face is light, `[hires] gamma=` (0.5 to 4, default
 1 = off) raises TrueType coverage as `255 * (c/255)^(1/gamma)` when a glyph
