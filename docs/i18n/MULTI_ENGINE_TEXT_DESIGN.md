@@ -323,7 +323,12 @@ Grim keeps its `.laf.txt` files. One new key: `text_encoding` (AGS, SCUMM): `aut
   `korean.fnt` path still draws it.
 - **Proportional**: `[latin] mode=proportional` and `[render] metrics=font`
   advance each glyph by the face's own advance (SCI's `latinAdvanceGamePx()`, `textlatin.h`), so
-  a TTF no longer looks letter-spaced in the game's cell.
+  a TTF no longer looks letter-spaced in the game's cell. **Superseded**:
+  since cards C31/C34/C36, a TrueType face steps every glyph (wide and
+  Latin, translated text and the game's own text alike) by its own advance
+  *by default*, with no `metrics=font` needed; `[render] metrics=game` (or
+  any metrics key) is now the opt-in for the old game-cell spacing this
+  section describes as the starting point. See `HIRES_TEXT_MAP.md`.
 - **Warnings**: the "names no [bitmap] fonts" warning is not printed when the
   map (or ini) names a TTF face; a missing `encoding.dat` gives one warning
   naming `--extrapath`, and the Hangul probe refuses a face that draws no

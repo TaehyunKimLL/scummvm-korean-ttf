@@ -102,6 +102,22 @@ What to expect, and what to check:
   warning that names the last face means those characters will not show.
   Grim does not check coverage and has no fallback face: a character
   its face lacks is drawn as that face draws a missing glyph.
+- **What counts as "the face has it" (C24).** A face has a code point only
+  if it draws ink for it, or - for a space (`U+0020`, `U+00A0`, `U+3000`,
+  or any other Unicode space separator the face gives a non-zero advance)
+  - if it advances for it. A face that outlines only some of a translation's
+  syllables (for example a Korean font limited to the 2350 KS X 1001
+  syllables) is fine as the first face of a chain: every syllable it draws
+  nothing for falls to the next face, exactly as a missing glyph does. A
+  bitmap-only face that FreeType reports as non-scalable (an embedded strike,
+  not an outline) opens only at its one built-in pixel size; at any other
+  size it is skipped with a warning, and the chain (or the game's font)
+  draws instead. The coverage check itself never counts a space or a
+  zero-width/format character (soft hyphen, ZWSP, ZWJ, variation
+  selectors, Hangul fillers, ...) as missing, so the warning text only ever
+  names letters, marks and other visible characters - even though such a
+  character still falls through the chain if no face in it actually draws
+  it.
 - **Line breaking** is the shared rule set: at spaces, before and after
   kana/kanji (kinsoku: no line starts with `。` `」` and similar, none ends
   with `「`), between Thai syllables (no dictionary; a word may be split),
@@ -273,12 +289,21 @@ metrics) is resolved independently, in this order, most specific first:
    and metrics; **`[hires:<platform>]`/`[hires]`** for the face and size
    a `[font.N]` did not itself name.
 4. **The built-in default**: size 16, Latin off, space keep, metrics
-   game, no separate Latin face (the main face draws everything).
+   game, no separate Latin face (the main face draws everything). **On
+   SCUMM this last one differs** (C31, C34, C36): with no metrics key at
+   all and a TrueType face, the built-in default is to step every glyph
+   (wide and Latin) by the face's own advance, not by the game's cell -
+   see "Wide and Latin glyphs step by the face by default" in the SCUMM
+   section below for the exact rule and how to opt back into the game's
+   cell.
 
 So a map that names nothing for a font id reproduces today's behaviour
-for it exactly - the map only ever adds settings, never a game-wide
-override; an ini key is the only thing that can override every font id at
-once.
+for it exactly on SCI - the map only ever adds settings, never a
+game-wide override; an ini key is the only thing that can override every
+font id at once. On SCUMM, naming nothing still selects the game's own
+font entirely (no map, no change at all); it is the presence of a
+TrueType face with no metrics key that now steps by the face rather than
+the cell.
 
 One legacy shorthand, kept for compatibility with SCUMM maps: `[latin]
 enabled=true` means "the engine's usual Latin behaviour", which for SCI is
@@ -298,6 +323,7 @@ one warning and no effect (see "Warnings" below).
 |---|---|---|
 | `[hires]` | `font=` (or `face=`) | The face a `[font.N]` that names none falls back to - a `[fonts]` name, or a path |
 | `[hires]` | `size=` | Pixel size, same fallback role |
+| `[hires]` | `pixel=` (C28) | Design size (in px) of a pixel-grid font; fallback role, same as `size=` - see "Pixel-locked fonts" below |
 | `[fonts]` | *name*`=`*file* | Face name -> file, referenced by `font=`/`face=`/`latin_font=`/`latin_face=` elsewhere. Case-insensitive names; relative paths are taken against the directory holding the map |
 | `[latin]` | `mode=` | `off` \| `half` \| `fullwidth` \| `proportional` - the default for every font id |
 | `[latin]` | `font=` (or `face=`) | Face for the Latin range; absent means the font's own face draws it |
@@ -305,10 +331,12 @@ one warning and no effect (see "Warnings" below).
 | `[latin]` | `metrics=` | `game` \| `font` (proportional mode only) |
 | `[font.N]` | `face=` (or `font=`) | Face for this font id |
 | `[font.N]` | `size=` | Pixel size for this font id |
+| `[font.N]` | `pixel=` (C28) | Design size (in px) of a pixel-grid font for this font id, overriding `[hires] pixel=` |
 | `[font.N]` | `latin=` | Overrides `[latin] mode=` for this font id |
 | `[font.N]` | `latin_font=` (or `latin_face=`) | Overrides `[latin] font=` for this font id |
 | `[font.N]` | `latin_space=` | Overrides `[latin] space=` for this font id |
 | `[font.N]` | `metrics=` | Overrides `[latin] metrics=` for this font id |
+| `[font.N]` | `mirror=` (C27, SCUMM only) | `true` \| `false` \| `horizontal` \| `vertical` \| `both` - draw this font id's glyphs flipped; see "Mirrored charsets" below |
 
 `[font.N]` must be written exactly that way - a numeric id, `[font.4]`,
 optionally `[font.4:pc98]`. `[font.04]` or `[font.4:]` (an empty
@@ -327,17 +355,93 @@ same meanings, with these differences
 | `[hires] face=`, `[font.N] face=` | a face or a comma-separated chain; the first face with the character draws it, then the game's font. Else `[fonts] default=`; the ini `hires_text_font` overrides all |
 | `[hires] size=`, `[font.N] size=` | the characters' pixel size (as SCI); without one, the face is opened at the game cell times the scale, its line filling the cell (as before). `[hires] size=` applies to every charset: a game whose charsets have different cell heights (MI1's 16-px sentence line beside its dialogue) should use `[font.N] size=` per charset |
 | `[latin] mode=`, `[font.N] latin=` | `off`/`half`/`fullwidth`/`proportional` as on SCI; the **default is `proportional`** (SCUMM always drew ASCII with the replacement); `[latin] enabled=false` means `off` |
-| `[latin] metrics=`, `[font.N] metrics=` | ASCII under `proportional`: `game` = the game's width, `font` = `latinAdvanceGamePx()` of the face's advance. `[font.N] metrics=` also sets wide and other glyphs for that charset; the ini `hires_text_metrics` wins over both |
-| `[render] metrics=` | unchanged: wide glyphs (Hangul, kanji) keep the cell rule with it |
+| `[latin] metrics=`, `[font.N] metrics=` | `game` = the game's cell width for this charset's Latin range, `font` = the older explicit proportional path (`latinAdvanceGamePx()` of the face's advance, with carry). `[font.N] metrics=` also sets wide glyphs for that charset; the ini `hires_text_metrics` wins over both |
+| `[render] metrics=` | `game` restores the game's cell for **every** glyph (wide and Latin) that a metrics key would otherwise steer to the face - see "Wide and Latin glyphs step by the face by default" below |
 
-Glyphs are placed by their own metrics: a wide glyph keeps the game's cell
-rule (a legacy layout does not move), a combining mark advances 0 and is
-drawn against the previous base, every other glyph advances by the face
-(`metrics=font` unless a key says `game`), and a glyph under
-`metrics=game` is centred in its game cell. With a translation loaded,
-each face is checked against 64 of its code points (one warning per face).
-A SCUMM map with none of `[hires] face/size`, `[font.N]` and
-`[latin] mode/space` is read exactly as before.
+**Wide and Latin glyphs step by the face by default (C31, C34, C36).** With
+a TrueType face and **no metrics key at all** - none of the ini
+`hires_text_metrics`, `[render] metrics=`, `[font.N] metrics=` or
+`[latin] metrics=` - every glyph the face draws (a wide CJK syllable since
+C31, and ASCII `0x21`-`0x7E` since C34/C36) advances by that face's own
+advance, rounded up to game pixels for wide glyphs and rounded half up for
+Latin, and is drawn at the pen rather than centred in the game's cell.
+This is now the default **everywhere a TrueType face is used**: a legacy
+CP949/EUC-KR patch, a UTF-8 translation, and the game's own untranslated
+text (English included) all step by the face the same way. A combining
+mark still advances 0 and is drawn against the previous base. Bitmap
+(SVFN) faces, and any face a `[glyphs]` entry or `[latin] mode=` other
+than `proportional` routes around, are unaffected and always keep the
+game's cell. A `pixel=` face (C28) is a TrueType face too, so it steps by
+its own (grid-locked) advance the same way.
+
+- **The space** advances by the face as well, *unless* the game is laying
+  that charset out on a legacy CJK patch's cells (a Korean or Chinese
+  `.fnt`/`.trs`/`.tra` patch under CP949, or the same cells read from a
+  patch's headers for a UTF-8 translation, C31) - there the space keeps
+  the game's own width, because it is also the word gap the CJK patches
+  were designed around. `[latin] space=fullwidth` also keeps the game's
+  space regardless.
+- **The way back to the old, game-cell spacing** is any explicit metrics
+  key: ini `hires_text_metrics=game`, `[render] metrics=game`,
+  `[font.N] metrics=game`, or `[latin] metrics=game`. Each of these
+  reproduces the pre-C31/C34/C36 layout exactly, including the Korean
+  patches' cell-plus-one-pixel gap. `[latin] metrics=font` still means the
+  older explicit proportional path (the same face-stepping idea, but with
+  a rounding carry and gated the old way); it is unchanged by these cards.
+- **Missing game glyphs are drawn.** A code point the game's own charset
+  has no bitmap for (MI1's charset 6 lacks `,` and `.`) used to measure and
+  draw as nothing; when it steps by the face it is now measured *and*
+  drawn, in a box as wide as its face step. `[render] metrics=game` (or
+  any other explicit metrics key) keeps the old "invisible" behaviour.
+- **Latin drawn by the face drops the game glyph's own per-glyph
+  y-offset**, so ASCII sits on one baseline the way ordinary TrueType text
+  does, instead of inheriting the bitmap font's per-glyph baseline wobble
+  (some charsets nudge `,`/`p`/`g`/`j` down by one game pixel). An explicit
+  metrics key keeps the old placement, descender wobble included.
+- **A mirrored charset (C27) that stays on the game's own font** is
+  unaffected by any of this, whatever the metrics keys say.
+- **FM-Towns and the SCUMM V2 renderer keep the game's widths** for Latin
+  even with no metrics key: their `getCharWidth()` never asks the hi-res
+  layer, so measuring and drawing would otherwise disagree. A TTF map for
+  such a target should still set `[render] metrics=game` explicitly to
+  make the intent clear.
+- **A map without a metrics key changes line breaks and box sizes** for
+  *every* existing SCUMM map that names a TrueType face, English included -
+  the shipped `korean-default.map`, `mi1-styled.map` and
+  `scumm-2x-neodgm.map` all rewrap. A map for an English (or any
+  untranslated) game that must keep the original's exact line breaks needs
+  `[render] metrics=game`.
+- **Known limits.** Each glyph rounds its own step up (or half up, for
+  Latin) with no carry between glyphs, so at 3x/4x scale a syllable or
+  letter can sit up to (scale-1) output px looser than the older
+  carry-based `metrics=font` path gave; visible only at 3x and above.
+  FM-Towns Japanese (SJIS) measures with a fixed width while drawing takes
+  the face step, so a centred FM-Towns Japanese line can sit off-centre by
+  `(cell - step) x n / 2`; use `[render] metrics=game` there too.
+
+With a translation loaded, each face is checked against 64 of its code
+points (one warning per face). A SCUMM map with none of `[hires]
+face/size/pixel`, `[font.N]` and `[latin] mode/space` is read exactly as
+before.
+
+**UTF-8 over a legacy CJK patch reads only the patch's font headers
+(C31).** When a UTF-8 translation (`ko.trs`, a Chinese `.trs`, ...) plays
+next to a legacy Korean/Chinese patch's own font files
+(`korean0N.fnt`/`korean.fnt`/`chinese_gb16x12.fnt`), SCUMM reads just
+those files' headers - cell size, shadow mode, line height, the Korean
+`+1` gap - to lay the UTF-8 text out on the same grid the CP949 text uses;
+it never loads the patch's own glyphs (the TrueType face chain draws the
+glyphs). The result is that **a CP949 patch and a UTF-8 translation using
+the same map and the same faces are pixel-identical** wherever hi-res text
+is on. Without such a patch beside it, a UTF-8 translation lays out purely
+by the face's own metrics.
+
+**Centred text breaks Hangul (and other wide-script text) at spaces by
+default**, matching the CP949 patches' own rule, but **only while hi-res
+text is enabled** - with hi-res text off, centred UTF-8 text keeps its
+older "break anywhere" rule, so a map that turns hi-res text off leaves
+line breaking exactly as it always was. `[layout] hangul=any` restores
+the "break anywhere" rule with hi-res on.
 
 **Not yet implemented**, though a map that already has them for SCUMM
 will not warn: `baseline=`, and `[hires] scale=` beyond what the
@@ -393,6 +497,60 @@ the gaps it had above 1 px. Engine-side detail:
 `engines/scumm/HIRES_TEXT_DECORATIONS.md` and `graphics/hires_text/README.md`
 ("Decoration (C19)").
 
+### Mirrored charsets: `mirror=` (SCUMM, C27)
+
+MI1 (v4/v5), MI2 (v5) and Loom CD store charset 3 (used for the dazed
+dialogue in MI1's Fettucini brothers' tent, room 51) turned half a turn:
+every glyph is the normal one flipped both across and down, and the
+strings themselves are stored back to front, so the game draws them left
+to right and the whole line reads upside down when the screen is the
+right way up. The Korean UTE patch ships its own cs3 Hangul font turned
+the same way, with its `korean.trs` line reversed by syllable.
+
+- **By default such a charset keeps the game's own font**, flipped as the
+  game always draws it - a map that touches nothing else reproduces the
+  original (and the Korean patch) pixel for pixel.
+- **`[font.N] face=`, `mirror=` or `bitmap=`** asks for the replacement
+  face instead; it is drawn flipped too (as the game's own font is)
+  unless `mirror=false` says otherwise.
+- **`mirror=`** takes `true` (reproduce the game: half a turn for
+  MI1/MI2/Loom CD's charset 3, horizontal for a charset the engine's table
+  does not know), `false`/`off`/`no`/`0`/`none`, or a mode directly:
+  `horizontal`, `vertical`, `both`/`rotate`. Each glyph is flipped inside
+  its own advance box, in the string's stored order - nothing is
+  reordered. A combining mark flips together with its base.
+- **UTF-8 text is the one exception**: on a mirrored charset it always
+  takes the replacement face, flipped, because the game's own font has no
+  glyph for anything past ASCII (it would draw `?`).
+- **A translation for a mirrored charset must store the line already
+  reversed, by grapheme cluster** (a base followed by its own marks, not
+  code point by code point) - exactly as the Korean patch reverses its
+  Hangul syllables. Whole-line reversal at draw time is not implemented.
+- **A `[font.N]` section holding only `mirror=`** does not by itself
+  switch that font id to per-glyph placement (unlike `face=`, `size=` or
+  `pixel=`).
+- Verified against real game data on MI1/MI2 UTE and Loom CD only; a wrong
+  table entry for another release only keeps that charset on the game's
+  own font, which is harmless.
+
+### Erasing hi-res text on single-buffered screens (SCUMM, C32)
+
+SCUMM's verb area, MI1's dialogue-choice lines and the v0-v2 text screen
+are drawn straight into a **single-buffered** virtual screen: the game
+erases old text there by painting over the same buffer, not by swapping
+buffers. Since hi-res glyphs are drawn to the overlay instead of that
+buffer, the engine traces every hi-res glyph drawn on such a screen (its
+game cell and its inked area) and erases the traced glyphs whenever the
+game paints over the area their cell sits in - the moment a menu closes,
+verbs come back, or one dialogue choice replaces another. This is the
+third place hi-res text is erased, alongside `restoreCharsetBg()`
+(ordinary removable text) and the kept-text retirement on the main screen.
+Nothing about this is configurable from the map; it applies whenever the
+hi-res layer is on. The original GUI's own drawing (menus, the pause
+banner) saves and restores the traced-glyph records the same way it saves
+and restores the overlay's pixels, so text under a temporarily-opened menu
+comes back correctly once the menu closes.
+
 ### A face inside a font collection: `path.ttc#N` (C21)
 
 Any TrueType path a map names (`[fonts]`, `[hires] face=`, `[font.N] face=`,
@@ -408,6 +566,65 @@ descriptors name files inside the game and do not take it.
 Face numbers on macOS: AppleSDGothicNeo 0 Regular, 2 Medium, 4 SemiBold,
 6 Bold; SukhumvitSet 0 Thin, 2 Text; Hiragino Sans W3 is face 0 of its file.
 No extraction step (ttc2ttf.py) is needed any more.
+
+### Pixel-locked fonts: `pixel=` (C28)
+
+`size=` and the plain line fit both **fit** a face to the cell: they pick
+whatever pixel size makes the face's line, or a fixed probe set of glyphs,
+match the target height, which usually lands on a size a pixel font was not
+drawn at - a Galmuri or Neo둥근모 face shrunk or grown off its grid looks
+blurred or clipped instead of crisp. `pixel=<D>` says instead "this face is
+a pixel font designed at `D` px": the chain's **first** face opens at the
+largest multiple of `D` that fits the cell (or `D` itself in a smaller
+cell), with **no fit at all** - not to the line, not to a probe set, not to
+the translation's sample - and is drawn from the line's top in whole
+pixels, so its grid is never fractional.
+
+| Mode | Pixel size chosen | Layout cell | Fits to |
+|---|---|---|---|
+| Line fit (no `size=`, no `pixel=`) | `round(upm x cell / (winAscent+winDescent))` | the game's own cell | the line |
+| `size=N` | whatever makes the probe set (Hangul, `A g j y Å`, brackets, CJK quotes) fit N rows | **becomes N** (`size=` changes the layout cell, not just the raster) | the probe set |
+| `pixel=D` | the largest multiple of D that fits the cell (D itself in a smaller cell) | the game's cell (unchanged) | nothing - no probe, no line, no translation sample |
+
+- `[hires] pixel=` applies to every font id; `[font.N] pixel=` overrides it
+  for one. `[hires] size=`/`[font.N] size=` still work together with
+  `pixel=`: on SCUMM, `size=` (if also given) sets the cell `pixel=` grids
+  into instead of the game's own cell x scale; on SCI it is the cell
+  outright (default 16); on AGS it is the cell before the size multiplier.
+- **Only the chain's first face is opened as a pixel face.** The faces
+  behind it are ordinary fallbacks, fitted to the same cell as usual - a
+  chain such as `face=galmuri, sukhumvit` does not try to grid-lock
+  Sukhumvit.
+- **A face named only by the ini key `hires_text_font` (no map, or a map
+  that does not name that face) is never a pixel face**, even when
+  `[hires] pixel=` is set: `pixel=` only ever applies to a face the map
+  itself names. When SCI falls back from a `[font.N] face=` that failed to
+  open to the font id shared by every font, that shared face still takes
+  `[hires] pixel=` if the map sets it.
+- **SCUMM, SCI and AGS read `pixel=`; Grim does not.**
+- **AGS at N x (`[hires] scale=`/`hires_text_scale`, C23).** The N x pass
+  opens the pixel face at exactly N times the 1x face's own ppem (not N
+  times the design size fit into the N x cell), so the N x glyphs line up
+  pixel-for-pixel with the N x pens - `pixel=10` in a 15 px cell opens at
+  10 ppem at 1x and exactly 20 ppem at 2x.
+- **Recommended design sizes** for the fonts bundled with ScummVM (see
+  "Bundled fonts" below): Galmuri7 8, Galmuri9 10, Galmuri11 (Bold) 12,
+  Neo둥근모 16. A pixel font whose own line is taller than the cell it is
+  asked to fit keeps its ppem exactly, and is shifted down by whole rows
+  (never fractional) until its Hangul and `A g j y` ink fits; nothing about
+  a too-small cell shrinks the face.
+- **No auto-detection.** ScummVM cannot tell a pixel font from an ordinary
+  TrueType face on its own (`Graphics::Font` exposes neither the outline's
+  coordinate grid nor whether the face is an embedded bitmap strike without
+  reading outlines at load time, past the engine's probe budget) - `pixel=`
+  must be set by the map.
+- **Baking a pixel font's full Unicode repertoire.** `tools/korean/mkfont.py
+  --unicode <ranges>` writes a version-2 SVFN keyed by code point instead of
+  by code page (`ascii`, `latin1`, `hangul` = all 11172 syllables, `jamo`,
+  `cjk-punct`, `ksx1001` = the 2350 KS X 1001 syllables, `kana`, `thai`, or
+  raw hex ranges); a code point the face draws no ink for (including one
+  that renders identically to its `.notdef`) is left out, so the chain
+  falls back for it instead of baking a blank cell.
 
 ### Bundled fonts and maps: `data:` paths (C29)
 
@@ -662,10 +879,22 @@ Full design and results: `AGS_HIRES_TEXT_DESIGN.md` (card C23, merged
   `scale=` either way. Prefer N=2 over N=3 for a 320×200 game when
   `aspect_ratio` is on.
 - N≥2 is allowed for 640-wide games; 2× gives a 1280-wide window.
-- OpenGL at N≥2 has not been measured on this fork (pending card C30); the
-  code path is backend-agnostic (`initGraphics` at N× size and 32bpp,
-  `copyRectToScreen`/`updateScreen`, `lockScreen` for dumps), but GL's
-  pixel format and texture size at N=3 are untested.
+- **OpenGL at N≥2 is now measured (C30) and matches SurfaceSDL.** On Mesa
+  llvmpipe the GL screen presents as ARGB8888 (no `copySurface` swizzle),
+  frame times at N=1..3 are in the same range as SurfaceSDL, and native
+  frames, invariant 3 (outside the text rects, the N× frame is the
+  upscaled native frame) and the real pointer all matched SurfaceSDL at
+  N=1..3. The RGBA/ABGR GL pixel-format path remains unmeasured.
+- **A backend that refuses the N× mode falls back to 1× (C33).** Before
+  C33 a refused mode (for example a GPU whose texture-size limit is below
+  the requested N× resolution) aborted the game with an error dialog. Since
+  C33, `AGSEngine::setGraphicsMode()` tries the N× size and, on a size or
+  format refusal, falls back to the native size with one console warning
+  ("hires text: the backend refused the WxH display; running at the
+  game's WxH (scale 1)") instead of aborting - verified on both
+  SurfaceSDL and OpenGL by forcing a refusal. `Present()`'s own
+  size-mismatch fallback (§G above) is unchanged and still covers a later,
+  mid-game mode change.
 - **Debug commands** (see `DEBUG_SOCKET.md`): `ags_dump_native`,
   `ags_render_text`, `ags_hires_rects`, `ags_frame_times`, `ags_call`.
 

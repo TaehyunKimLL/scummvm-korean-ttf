@@ -1,6 +1,7 @@
 # Hi-res text for AGS: text twins over an N× frame
 
-Status: **implemented, merged 0e3148bd89; OpenGL check pending (C30).**
+Status: **implemented, merged 0e3148bd89; OpenGL measured and the N×
+fallback fixed (C30, C33).**
 Originally written as a design against `i18n` at `d73eba2426`. It extends
 `HIRES_COMPOSITOR_DESIGN.md` (SCI) and `MULTI_ENGINE_TEXT_DESIGN.md`
 §2.2/§7.2 (AGS) to the case that document left out of scope ("hi-res
@@ -552,3 +553,51 @@ review; the rest of this section records the answers.
 
 **New AGS debug-socket commands** (see `DEBUG_SOCKET.md`): `ags_dump_native`,
 `ags_render_text`, `ags_hires_rects`, `ags_frame_times` and `ags_call`.
+
+### OpenGL, and the N× fallback (C30, C33)
+
+**OpenGL at N=1/2/3, measured (C30, Linux/Mesa llvmpipe).** The open
+question from T7 ("OpenGL at N=2: not run") is closed: `[hires] scale=`
+was captured on 5 Days a Stranger at N=1, 2 and 3 with `--gfx-mode=opengl`
+(AGS in ScummVM has no GL renderer of its own - it always draws in
+software and presents through the backend, so "AGS OpenGL" means the
+*presentation* is GL). Results:
+
+- The GL screen format is **ARGB8888** on this hardware, so there is no
+  `copySurface` swizzle and GL costs about the same as SurfaceSDL; the
+  RGBA/ABGR pixel-format path (common on some GL drivers) remains
+  unmeasured.
+- Invariant 3 (outside the text rects, the N× frame equals the upscaled
+  native frame) holds at N=1/2/3, 10/10 checked frames each.
+- The real pointer (xdotool) against the debug socket's own mouse mapping
+  agreed at N=1/2/3, in every fullscreen mode (fit, stretch, centre,
+  pixel-perfect, fit+aspect).
+- Frame times (idle, plus a text draw, plus a mouse sweep) on GL were
+  within noise of SurfaceSDL's, at every N.
+- Grim (a separate engine, captured alongside for the same Linux/OpenGL
+  pass): the legacy GL and shader renderers both show Korean subtitles
+  correctly and pass the C12 restore-matrix regression 9/9; a shader-only
+  observation (Korean TTF subtitles look bolder under `opengl_shaders`
+  than under legacy GL or software, from `GL_LINEAR` plus a
+  window-resolution draw) is cosmetic, not a defect.
+
+**A refused N× mode now falls back to 1×, on both backends (C33).** Before
+C33, a backend that refused the N× display size (for example a GPU
+texture-size limit below the requested resolution) reached
+`warnTransactionFailures()` and aborted the game with an error dialog -
+the "everything at game resolution unchanged, or the game just doesn't
+show hi-res text" contract of §G/G8 was silently broken by an abort
+instead. C33 makes `AGSEngine::setGraphicsMode()` try the N× size first
+and, on a size or format refusal, fall back to the native size (one
+console warning, then the ordinary N=1 code path: `DropHiResTextState()`,
+which is `DisableHiResTextScale()`'s state half factored out and shared
+with start-up) instead of erroring out. Verified by forcing a refusal
+(texture-size and window-width caps) on both SurfaceSDL (Mac) and OpenGL
+(Linux/Mesa): the game starts and runs at 1×, with output pixel-identical
+to an ordinary N=1 run, at N=2 and N=3 alike. `Present()`'s own
+size-mismatch fallback (§5.2/G above) is unchanged and still covers a
+*later*, mid-game mode change (Alt+Enter, a windowed/fullscreen toggle);
+only the start-of-game path needed the fix.
+
+Both results are also recorded in `HIRES_TEXT_MAP.md`, "AGS hi-res text at
+N× (`[hires] scale=`, C23)".

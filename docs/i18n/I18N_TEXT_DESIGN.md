@@ -494,7 +494,11 @@ In game px (SCI and SCUMM lay out in low-res units), the advance of a
 non-wide glyph is `latinAdvanceGamePx(kHiResMetricsFont, gameW, m.advance,
 scale)` (the existing rule, `latin_advance.h`); a wide glyph keeps today's
 cell rule (so Hangul and kanji keep their grid and KQ1-ko stays 0 px); a
-combining mark is 0. The hi-res `anchorX` is kept **in source px** by the
+combining mark is 0. **On SCUMM this default was later reversed (C31, C34,
+C36): with a TrueType face and no explicit `metrics=game`, both wide and
+Latin glyphs step by the face's own advance instead of the game's cell, in
+every SCUMM text - see `HIRES_TEXT_MAP.md`, "Wide and Latin glyphs step by
+the face by default".** The hi-res `anchorX` is kept **in source px** by the
 drawer (not recomputed from rounded game px), so a mark lands where the face
 puts it regardless of rounding.
 
@@ -860,8 +864,22 @@ each was ruled on or accepted during T1-T9 (`progress.md` of plan 6):
   leaves small gaps in Thai on SCI (advances round to 2 hi-res px).
 - **UTF-8 Korean on SCUMM with hi-res on is spaced per glyph**, not on the
   CP949 `.fnt` cell; it breaks lines where the CP949 bundle does (2000/2000
-  in the unit test) but is not pixel-identical (T7 ruling). Korean josa/verb
-  glue is not generalised: UTF-8 bundles drop the glue codes.
+  in the unit test). **Superseded by C31**: a UTF-8 translation played next
+  to a legacy Korean/Chinese patch now reads that patch's font headers
+  (cell, shadow, line height) for layout, and with a TrueType face and no
+  metrics key both encodings step wide glyphs by the same face advance, so
+  **CP949 and UTF-8 are now pixel-identical** with the same map (see
+  `HIRES_TEXT_MAP.md`, "Wide and Latin glyphs step by the face by
+  default" and "UTF-8 over a legacy CJK patch reads only the patch's font
+  headers"). Korean josa/verb glue is still not generalised: UTF-8 bundles
+  drop the glue codes.
+- **Latin (ASCII) inside SCUMM text steps by a TrueType face's own advance
+  by default too, English included (C34, C36)**, superseding the T7-era
+  behaviour above: with no metrics key, ASCII is no longer centred in the
+  game's fixed cell in *any* SCUMM text, translated or not. `[render]
+  metrics=game` (or any other metrics key) restores the original,
+  byte-identical spacing. See `HIRES_TEXT_MAP.md` for the full rule,
+  the space/CJK-cell exception, and the FM-Towns/V2 renderer caveat.
 - **SCUMM UTF-8 bundles** only on the v1-v6 PC renderers; HE, v7/v8,
   FM-Towns, PCE, SegaCD, NES and Mac ignore one with a warning. Code points
   above U+FFFF become U+FFFD; the game's own font draws every non-ASCII code
