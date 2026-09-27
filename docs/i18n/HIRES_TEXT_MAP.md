@@ -252,6 +252,27 @@ platform's own driver, which has no text plane - its glyphs are not shown
 (one warning: "the graphics driver for this game ... does not composite
 the text layer"). Use the DOS release, or turn hi-res graphics off.
 
+### AGS (C11 T8)
+
+AGS reads the map only when the game directory has `hires_text.map` or the
+ini names one with `hires_text_map=`; its sections are qualified by the game
+id (`[font.0:5daysastranger]` before `[font.0]`). `N` in `[font.N]` is the
+AGS font number. Without a map and without `hires_text_font`, every font is
+the game's own (`agsfntN.ttf`/`.wfn`, plus a Korean patch's `extfntN.wfn`).
+
+| Key | AGS |
+|---|---|
+| `[font.N] bitmap=` | an SVFN font for font N, relative to the map; wins over every face |
+| `[font.N] face=`, ini `hires_text_font`, `[hires] face=`, `[fonts] default=` | in this order, the first that is set: a face or a comma-separated chain; the first face with the character draws it, then the game's own font N (character by character, so a run the chain lacks loses the game font's kerning) |
+| `[font.N] size=`, ini `hires_text_font_size`, `[hires] size=` | pixels; without one, the game font's height |
+| `[hires] alpha=` | default `true`: coverage is blended into 16/32-bit games; `false` (and 8-bit games) draw a pixel where coverage is at least half |
+| `[layout] hangul=`, `kinsoku=`, `thai=` | line breaking, defaults `word`, `on`, `on`. Breaking goes through the shared layout stage only for a UTF-8 translation, an EUC-KR (Korean patch) translation, or while the map names fonts; an English or native UTF-8 game without either keeps AGS's own breaking |
+
+With a UTF-8 translation, each face is checked against 64 of its code points
+(one warning per face). A translation with combining marks (Thai) whose
+game fonts are TTFs drawn by alfont gets one hint to add a map: alfont clips
+the marks above the line and places them after their base.
+
 ### `[glyphs]` ranges
 
 A range remaps or keeps many codes in one line, instead of one `[glyphs]`
