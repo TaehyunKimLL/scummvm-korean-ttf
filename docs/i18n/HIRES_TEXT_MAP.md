@@ -186,7 +186,7 @@ same meanings, with these differences
 | `[font.N]` | `N` is the SCUMM **charset id**, 0..19 (not an SCI font id) |
 | `[font.N] bitmap=` | an SVFN for that charset, relative to the map, tried before its faces |
 | `[hires] face=`, `[font.N] face=` | a face or a comma-separated chain; the first face with the character draws it, then the game's font. Else `[fonts] default=`; the ini `hires_text_font` overrides all |
-| `[hires] size=`, `[font.N] size=` | the characters' pixel size (as SCI); without one, the face is opened at the game cell times the scale, its line filling the cell (as before) |
+| `[hires] size=`, `[font.N] size=` | the characters' pixel size (as SCI); without one, the face is opened at the game cell times the scale, its line filling the cell (as before). `[hires] size=` applies to every charset: a game whose charsets have different cell heights (MI1's 16-px sentence line beside its dialogue) should use `[font.N] size=` per charset |
 | `[latin] mode=`, `[font.N] latin=` | `off`/`half`/`fullwidth`/`proportional` as on SCI; the **default is `proportional`** (SCUMM always drew ASCII with the replacement); `[latin] enabled=false` means `off` |
 | `[latin] metrics=`, `[font.N] metrics=` | ASCII under `proportional`: `game` = the game's width, `font` = `latinAdvanceGamePx()` of the face's advance. `[font.N] metrics=` also sets wide and other glyphs for that charset; the ini `hires_text_metrics` wins over both |
 | `[render] metrics=` | unchanged: wide glyphs (Hangul, kanji) keep the cell rule with it |
