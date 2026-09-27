@@ -88,8 +88,8 @@ What to expect, and what to check:
   identified at all. AGS needs nothing.
 - **Fonts: one map for every language.** Name the faces once as a chain,
   `face=ko, ja, th`; each character is drawn by the first face that has it
-  ("One map, three languages" below). A TTC file opens its face 0 only:
-  extract another face first (`harness/i18n/c11/ttc2ttf.py`). For Thai
+  ("One map, three languages" below). Pick a face inside a TTC with
+  `path.ttc#N` (C21). For Thai
   choose a face whose marks have zero advance and a negative bearing
   (Sukhumvit Set; **not** Thonburi, which needs shaping).
 - **Coverage warnings.** With a UTF-8 translation, SCI, SCUMM and AGS
@@ -132,8 +132,8 @@ face=ko, ja, th
 [fonts]
 ko=/System/Library/Fonts/AppleSDGothicNeo.ttc
 ja=/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc
-; face 2 ("Text") of SukhumvitSet.ttc, extracted: a .ttc opens face 0 only
-th=sukhumvit-text.ttf
+; face 2 ("Text") of SukhumvitSet.ttc; face 0 is "Thin"
+th=/System/Library/Fonts/Supplemental/SukhumvitSet.ttc#2
 ```
 
 With a Japanese translation, kana and kanji that AppleSDGothicNeo has are
