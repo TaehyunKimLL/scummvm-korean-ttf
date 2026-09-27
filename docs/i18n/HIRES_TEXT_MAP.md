@@ -409,20 +409,125 @@ Face numbers on macOS: AppleSDGothicNeo 0 Regular, 2 Medium, 4 SemiBold,
 6 Bold; SukhumvitSet 0 Thin, 2 Text; Hiragino Sans W3 is face 0 of its file.
 No extraction step (ttc2ttf.py) is needed any more.
 
+### Bundled fonts and maps: `data:` paths (C29)
+
+ScummVM ships a small set of free (OFL) fonts and four example maps in the
+tree, at `dists/engine-data/hires_text/` - `fonts/<family>/` and `maps/`.
+A map (or an ini path key) can name one of them without knowing where the
+data directory ended up, with the `data:` prefix:
+
+```ini
+[fonts]
+ko=data:hires_text/fonts/nanumgothic/NanumGothic-Bold.ttf
+```
+
+- **The prefix is case-sensitive** (`data:`, not `Data:`) and is recognised
+  anywhere a path is otherwise accepted: `[fonts]` entries, a bare `face=`/
+  `latin_font=`/`bitmap=` path, and the ini keys `hires_text_map` and
+  `hires_text_font` (SCUMM). SCI and AGS, which used to open
+  `hires_text_map=` with a raw file path, now also resolve a `data:` value
+  in it - so `hires_text_map=data:hires_text/maps/korean-default.map` works
+  in **SCUMM, SCI and AGS** alike. A `#N` face-collection suffix (previous
+  section) still works after a `data:` path.
+- **A `data:` path may not be absolute and may not contain a `..`
+  component** - it names a file shipped with ScummVM, not an arbitrary path
+  on disk. A value that breaks this rule is refused with one warning and
+  no folder is searched; write an ordinary relative or absolute path
+  instead.
+- **Search order.** The name after `data:` is looked for, in this exact
+  order, stopping at the first root that has the file:
+  1. the **command-line** `--extrapath`;
+  2. the **game's own** `extrapath` (its ini domain);
+  3. the **global** `extrapath` (`[scummvm]`);
+  4. the **dev default** - in a non-release build run from a source tree,
+     `dists/engine-data/` is put in the session domain automatically, so
+     `data:` finds the bundled fonts with no extra setup;
+  5. the **ScummVM data directory** (`DATA_PATH`, compiled in) - where
+     `make install-data` puts a copy, at `<datadir>/hires_text/`.
+
+  A file present in more than one root is taken from the first root that
+  has it. When no root has the file, the value is used as-is (so it still
+  fails to open, the normal way) and one warning is logged first:
+  `HiResText: 'data:X' is not in the extrapath or the ScummVM data
+  directory`.
+- **From a source tree**, run with `--extrapath=dists/engine-data` (or rely
+  on the dev-default root above).
+- **Packaging gap.** Only the POSIX `make install`/`install-data` carries
+  `hires_text/` into the installed tree. The macOS `.app` bundle,
+  dist-generic and the other port packages do **not** ship it, and `data:`
+  does not search the bundle's Resources folder. On those builds, copy
+  `hires_text/` somewhere and point `extrapath` at the folder that holds
+  it.
+
+#### Bundled fonts
+
+All are unmodified upstream files, OFL 1.1 licensed; the licence text and
+full attribution (copyright holder, designer, Reserved Font Names, source
+URL) is in `dists/engine-data/hires_text/fonts/FONTS.md`, one entry per
+family - read it before shipping a translation that uses one of these.
+
+| Family | File(s) | Licence | Use | Design size |
+|---|---|---|---|---|
+| NanumGothic | `nanumgothic/NanumGothic-{Regular,Bold}.ttf` | OFL 1.1, Nanum RFNs | Default Korean face: **Bold** for blended (alpha) text at 2x (SCUMM v5/v6, SCI, AGS); **Regular** for keyed 8-bit text. All 11172 Hangul syllables, no Hanja | - |
+| Galmuri7 | `galmuri/Galmuri7.ttf` | OFL 1.1, no RFN | Pixel font, 10 px cells | 8 px |
+| Galmuri9 | `galmuri/Galmuri9.ttf` | OFL 1.1, no RFN | Pixel font, Full Throttle's 12 px cell, keyed at 1x | 10 px |
+| Galmuri11 Bold | `galmuri/Galmuri11-Bold.ttf` | OFL 1.1, no RFN | Pixel font, 16 px cells (Regular cut not shipped, >5 MB) | 12 px |
+| Neo둥근모 (NeoDunggeunmo) | `neodgm/neodgm.ttf` | OFL 1.1, Neo둥근모 RFNs | Keyed SCUMM v5/v6 text at 2x, DOS-era pixel look | 16 px |
+| Black Han Sans | `blackhansans/BlackHanSans-Regular.ttf` | OFL 1.1, no RFN | Korean heavy display face (chapter cards, credits). 2581 syllables (KS X 1001's 2350 plus 231) - chain a full-coverage face after it |
+| Coustard | `coustard/Coustard-Black.ttf` | OFL 1.1, no RFN | Latin heavy serif display face (`latin_font=` beside Black Han Sans) |
+| Nanum Myeongjo Bold | `nanummyeongjo/NanumMyeongjo-Bold.ttf` | OFL 1.1, Nanum RFNs | Korean serif (light display text, e.g. MI1/MI2 verb charset). All 11172 syllables |
+| EB Garamond | `ebgaramond/EBGaramond-VF.ttf` | OFL 1.1, no RFN | Latin old-style serif (`latin_font=` beside Nanum Myeongjo). Variable font |
+| Nanum Pen Script | `nanumpenscript/NanumPenScript-Regular.ttf` | OFL 1.1, Nanum RFNs | Korean handwriting (notes, e.g. Blackwell). All 11172 syllables |
+| Caveat | `caveat/Caveat-VF.ttf` | OFL 1.1, no RFN | Latin handwriting (`latin_font=` beside Nanum Pen Script). Variable font |
+
+- **OFL renaming rule.** Every font here is shipped unmodified. Under the
+  OFL, a *modified* version - a subset, a baked SVFN/bitmap conversion, a
+  hinted or re-encoded copy - must **not** keep a Reserved Font Name. So a
+  baked bitmap font built from NanumGothic, Nanum Myeongjo, Nanum Pen
+  Script or Neo둥근모 (all of which carry RFNs) needs a new name; Galmuri,
+  Black Han Sans, Coustard, EB Garamond and Caveat have no RFN and may keep
+  their name even when subset or baked.
+- **Variable-font weight caveat.** EB Garamond (weight axis 400-800) and
+  Caveat (400-700) are shipped as their single variable-font file, but
+  ScummVM's FreeType loader opens only the **default instance, Regular
+  400** - there is no map key yet to pick a bolder instance. If a design
+  needs EB Garamond or Caveat at a heavier weight, that weight is not
+  reachable through the map; use a different face for now.
+- **Two files were renamed from their upstream names**, bytes unchanged:
+  `EBGaramond[wght].ttf` -> `EBGaramond-VF.ttf`, `Caveat[wght].ttf` ->
+  `Caveat-VF.ttf` (square brackets are awkward in map files and Makefile
+  wildcards).
+
+#### Example maps (`dists/engine-data/hires_text/maps/`)
+
+| Map | For | What it does |
+|---|---|---|
+| `korean-default.map` | SCUMM v5/v6, SCI, AGS - a starting point for any Korean translation | `scale=2, alpha=true`, NanumGothic Bold via `data:`, blended |
+| `ft-keyed-galmuri9.map` | Full Throttle (SCUMM v7) Korean, keyed 1x | Galmuri9 at its 10 px design size, `cp949`, no `size=` (a size key would shrink it off its pixel grid) |
+| `scumm-2x-neodgm.map` | SCUMM v5/v6 Korean, keyed 2x, DOS look | Neo둥근모 held at `size=16` per charset (its design size) |
+| `mi1-styled.map` | The Secret of Monkey Island (UTE) Korean | Per-charset styled faces - Black Han Sans + Coustard for the heavy display charset, Nanum Myeongjo Bold + EB Garamond for the light-serif charset, NanumGothic Bold elsewhere |
+
+Copy one into a game folder as `hires_text.map`, or point
+`hires_text_map=data:hires_text/maps/<name>.map` at it directly; a map
+loaded this way should use `data:` for its own font paths too, since its
+folder is the data folder, not the game's.
+
 ### Heavier text: a heavier face, or `[hires] gamma=` (C20)
 
 Thin faces look grey once text is blended over an outline (MI2 Korean in
 Apple SD Gothic Neo Regular). The recommended Korean face is **NanumGothic
 Bold** (Naver, OFL, all 11172 syllables drawn; chosen in C22 from the
 공유마당 free-font board): heavier than Apple SD Gothic Neo Bold at game sizes
-(mean text level 205 against 189) with dense syllables still open, and it may
-be shipped with a map (keep its OFL text next to it). It has no Hanja; for
-text with Hanja use Noto Sans KR Bold. Beware free fonts that map all 11172
-syllables but draw only 2350 (many municipal fonts do): the missing ones come
-out blank. On macOS without extra fonts,
-AppleSDGothicNeo.ttc face 6 is Bold, which C20 measured as the best
-default for Korean (mean text level 190 against Regular's 171, and dense
-syllables such as 췄 떡 밥 stay open):
+(mean text level 205 against 189) with dense syllables still open. It ships
+with ScummVM (see "Bundled fonts and maps" above) as
+`data:hires_text/fonts/nanumgothic/NanumGothic-Bold.ttf` - use that path
+instead of a local copy where the target build has the bundled fonts
+available. It has no Hanja; for text with Hanja use Noto Sans KR Bold.
+Beware free fonts that map all 11172 syllables but draw only 2350 (many
+municipal fonts do): the missing ones come out blank. On macOS without
+extra fonts, AppleSDGothicNeo.ttc face 6 is Bold, which C20 measured as the
+best default for Korean (mean text level 190 against Regular's 171, and
+dense syllables such as 췄 떡 밥 stay open):
 
 ```ini
 [fonts]
@@ -493,6 +598,7 @@ the game's own (`agsfntN.ttf`/`.wfn`, plus a Korean patch's `extfntN.wfn`).
 | `[font.N] face=`, ini `hires_text_font`, `[hires] face=`, `[fonts] default=` | in this order, the first that is set: a face or a comma-separated chain; the first face with the character draws it, then the game's own font N (character by character, so a run the chain lacks loses the game font's kerning) |
 | `[font.N] size=`, ini `hires_text_font_size`, `[hires] size=` | pixels; without one, the game font's height |
 | `[hires] alpha=` | default `true`: coverage is blended into 16/32-bit games; `false` (and 8-bit games) draw a pixel where coverage is at least half |
+| `[hires] scale=`, ini `hires_text_scale` | N, 1-3, default 1 (off). Draws the game's mapped text at N× over an N×-upscaled game frame; see "AGS hi-res text at N× (`[hires] scale=`, C23)" below |
 | `[layout] hangul=`, `kinsoku=`, `thai=` | line breaking, defaults `word`, `on`, `on`. Breaking goes through the shared layout stage only for a UTF-8 translation, an EUC-KR (Korean patch) translation, or while the map names fonts; an English or native UTF-8 game without either keeps AGS's own breaking |
 
 With a UTF-8 translation, each face is checked against 64 of its code points
@@ -521,6 +627,47 @@ Details worth knowing on AGS (C11 T8 review, `[source]` in
   the file and does not clear it on failure (upstream behaviour, kept).
   Only a native UTF-8 game is affected (it then breaks lines with the
   shared stage); an ASCII game is not, and its text is unchanged.
+
+### AGS hi-res text at N× (`[hires] scale=`, C23)
+
+Full design and results: `AGS_HIRES_TEXT_DESIGN.md` (card C23, merged
+`0e3148bd89`).
+
+- **`[hires] scale=` (map) or `hires_text_scale` (ini), 1-3, default 1.**
+  N=1 is today's behaviour exactly, byte-identical, at no measurable cost.
+  N≥2 shows the display at N× the game's native size (AGS's own render-frame
+  scaling; the mouse is unscaled by existing code) and draws the map's
+  mapped text - speech, `Display()` boxes, text overlays, GUI
+  labels/buttons/list boxes/text boxes, and the built-in dialog options -
+  at N× from the same faces, with real alpha. A game whose text is not
+  mapped, or whose map names no `scale=`, is unaffected.
+- **Needs a mapped font, a 16- or 32-bit game, and a 32-bit screen format**;
+  otherwise one warning ("hires text scale N needs a mapped font ...;
+  using 1") and N stays 1. 8-bit games always stay at N=1.
+- **Everything at game resolution is unchanged**: line breaks, box sizes,
+  pen positions, and every pixel a script, plugin, screenshot or save game
+  reads. The N× pass redraws the same strings at N× the game-resolution pen
+  positions; layout itself never runs at N×.
+- **What stays native (upscaled), in v1:** script-drawn text
+  (`DrawingSurface.DrawString(Wrapped)`, `RawPrint`), custom dialog-option
+  rendering done by the game's own script, stretched or flipped overlays,
+  and room-layer overlays (`Overlay.CreateRoomTextual`, cropped by
+  walk-behinds). A character the map's faces lack is drawn by the game's
+  own font and upscaled, as always.
+- **Aspect-ratio correction** (SurfaceSDL and OpenGL) only corrects
+  320×200 and 640×400 *output* sizes (plus the EGA/Hercules sizes). A
+  320×200 game keeps 4:3 correction at N=2 (640×400) but loses it at N=3
+  (960×600); a 640×400 game loses correction at N=2 (1280×800) already.
+  Games at other native sizes (320×240, 640×480, ...) are not affected by
+  `scale=` either way. Prefer N=2 over N=3 for a 320×200 game when
+  `aspect_ratio` is on.
+- N≥2 is allowed for 640-wide games; 2× gives a 1280-wide window.
+- OpenGL at N≥2 has not been measured on this fork (pending card C30); the
+  code path is backend-agnostic (`initGraphics` at N× size and 32bpp,
+  `copyRectToScreen`/`updateScreen`, `lockScreen` for dumps), but GL's
+  pixel format and texture size at N=3 are untested.
+- **Debug commands** (see `DEBUG_SOCKET.md`): `ags_dump_native`,
+  `ags_render_text`, `ags_hires_rects`, `ags_frame_times`, `ags_call`.
 
 ### `[glyphs]` ranges
 
@@ -588,6 +735,7 @@ The exact warning text for each bound and for the table limit is in
 | `hires_text_latin_space` | The space handling (`keep`/`fullwidth`), for every font id |
 | `hires_text_metrics` | The metrics source (`game`/`font`), for every font id |
 | `hires_text_map` | Which map file is read, instead of `hires_text.map` |
+| `hires_text_scale` | **AGS only (C23).** The display/text scale N (1-3), overriding `[hires] scale=`; see "AGS hi-res text at N× (`[hires] scale=`, C23)" above |
 | `hires_text_log` | Diagnostic: logs each line drawn and which face drew each glyph (used to build the font-id table above) |
 
 These are meant for a player overriding a translation's choices (or for

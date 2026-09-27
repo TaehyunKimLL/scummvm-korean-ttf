@@ -60,8 +60,12 @@ Why this order besides the user's decision:
   which is SCI-sized work for two games.
 
 Not in scope: hi-res supersampled text for AGS (text stays at the game's
-native resolution); the Grim remaster; Sword1/2 alpha; AGS games with no data
-here (30minutes, Lamplight City, Zak2 fan game) beyond unit tests.
+native resolution) - **since built, see `AGS_HIRES_TEXT_DESIGN.md` (card
+C23, merged `0e3148bd89`): `[hires] scale=`/`hires_text_scale` draws AGS's
+engine-built text (speech, Display, overlays, GUI controls, built-in dialog
+options) at N× over an upscaled game frame**; the Grim remaster; Sword1/2
+alpha; AGS games with no data here (30minutes, Lamplight City, Zak2 fan
+game) beyond unit tests.
 
 ## 2. What each engine does today
 

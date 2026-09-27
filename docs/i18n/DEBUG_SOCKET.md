@@ -158,6 +158,52 @@ font for the call. `[measured]` 5 Days `--language=ko`: `wait frames 120`,
 `ags_say 0 #40`, `wait frames 5`, `dump` shows a text box with the Korean
 line (as mojibake until the EUC-KR/`extfnt` work).
 
+### AGS hi-res text at N× (C23): `ags_dump_native`, `ags_render_text`, `ags_hires_rects`, `ags_frame_times`, `ags_call`
+
+Card C23 (`AGS_HIRES_TEXT_DESIGN.md`, merged `0e3148bd89`) draws AGS's
+mapped text at N× (`[hires] scale=`/`hires_text_scale`) over an N×-upscaled
+game frame. These commands support it:
+
+- **`ags_dump_native <path>`** - the native (game-resolution) frame last
+  presented, in the generic `dump` format (raw rows at `<path>`, `w h bits
+  format` at `<path>.txt`, a palette at `<path>.pal` for 8-bit games). This
+  is the frame scripts, plugins, screenshots and saves see - at N≥2 the
+  socket's own `dump` reads the N× screen instead. It also writes the
+  screen of that same moment to `<path>.screen` (and `<path>.screen.txt`),
+  and the reply ends with `| <count> <x0,y0,x1,y1>...`, the N× text rects
+  of that frame, as `ags_hires_rects` reports them - so a single call gives
+  the native frame, the screen and the rects of one moment together.
+- **`ags_render_text <font> <scale> <path.png> <text|#n>`** - a probe,
+  independent of the game's own drawing: `text` (or translation entry `n`,
+  0-based) rendered with the game's outline setting into one PNG, the
+  game-resolution line nearest-upscaled on top and the N× line
+  (`scale` 1-3) below it, white on dark blue.
+- **`ags_hires_rects`** - the screen rects (native pixels, `x0,y0,x1,y1`,
+  exclusive) of the N× text drawn in the last presented frame; empty at
+  scale 1 or when no twin was drawn. Used to check that the N× frame is the
+  native one upscaled everywhere outside those rects (invariant 3 in
+  `AGS_HIRES_TEXT_DESIGN.md` §8).
+- **`ags_frame_times [reset|on|off]`** - mean milliseconds per frame of
+  `RenderToBackBuffer()` and `Present()` (N× composition included), of the
+  native-patch copy/compare (plugin hooks and own-surface batch blits while
+  a twin is on screen) and of building text twins, since the last reset.
+  The timers run automatically at scale ≥ 2; at scale 1 they only run after
+  `ags_frame_times on` (and stop again on `off`). `ags_frame_times reset`
+  zeroes the counters without changing whether they run.
+- **`ags_call <tint r g b | shake delay amount length | flip n | fadeout
+  speed | fadein speed | guitrans gui percent | dialog n | saybg char
+  <key|#n>>`** - a test driver: runs one game function from the next game
+  loop (as `ags_say` does), for scenarios a game does not reach by itself
+  (a fade, a shake, a screen flip, a translucent GUI, a built-in dialog, a
+  background `Say`). Every argument is checked in the game's own range
+  before the call runs, and a bad one gets a `FAIL` reply rather than the
+  game's own `quit()` (an out-of-range `tint`/`flip`/`shake`/`guitrans`
+  value) or an endless loop (`fadeout`/`fadein` with `speed` ≤ 0 on an
+  8-bit game). `shake` needs `delay` ≥ 2; `delay` 1 ends the game with a
+  script error and is refused.
+- At N≥2, `click`/`move` take **screen** (N×) coordinates; AGS's own mouse
+  unscaling maps them back to the game.
+
 ## Turning it on (SCI, before C8)
 
 Nothing runs unless one of two keys is in the game's config section
