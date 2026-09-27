@@ -144,8 +144,10 @@ Japanese face. With the Thai translation both CJK faces lack every Thai
 character and Sukhumvit draws them. The same file works on:
 
 - **SCI** (KQ1): as is.
-- **SCUMM** (MI1 UTE): the C11 captures add `scale=2` and `alpha=true` to
-  `[hires]` (without a scale the text is drawn at 8 px), and a game whose
+- **SCUMM** (MI1 UTE): add `scale=2` to `[hires]` (without a scale the
+  text is drawn at 8 px). Since C17 a map whose fonts carry coverage (a face
+  or an 8 bpp bitmap) blends without `alpha=true`; write `alpha=false` for
+  hard edges. v7 games cannot blend and stay keyed. A game whose
   charsets differ in height should give sizes per charset with
   `[font.N] size=`.
 - **AGS** (5 Days a Stranger): add `[font.0]`, `[font.1]`, `[font.2]`
@@ -338,8 +340,8 @@ A SCUMM map with none of `[hires] face/size`, `[font.N]` and
 `[latin] mode/space` is read exactly as before.
 
 **Not yet implemented**, though a map that already has them for SCUMM
-will not warn: `[shadow]`, `baseline=`, and `[hires] scale=` beyond what
-the compositor already fixes. Per-glyph kerning/centring in proportional
+will not warn: `baseline=`, and `[hires] scale=` beyond what the
+compositor already fixes. Per-glyph kerning/centring in proportional
 mode and the legacy SJIS face are also not implemented yet.
 
 **`[glyphs]` is parsed, but not yet applied on SCI.** The shared parser
@@ -349,6 +351,47 @@ same way for both engines, so a bad entry - including a bad range - gives
 the same warning on an SCI map as it would on a SCUMM one (see "Warnings
 to expect" below). SCI just does not act on the resulting table yet: every
 game still draws its own glyphs for the codes a `[glyphs]` section covers.
+
+### Outline and shadow: `[shadow]` (SCUMM v1-v6, C19)
+
+The outline is built from the glyph's coverage, whatever the source (TrueType,
+an 8 bpp bitmap, a 1 bpp patch font), so it works the same for Korean,
+Japanese and Thai. By default it is round and antialiased, 0.75 x scale wide
+(1.5 output pixels at 2x). On a blended 32-bit screen it goes on a layer of its
+own under the text, so the text's antialiased edge sits on the outline with no
+seam. On a keyed 8-bit screen (v7, `alpha=false`, FM-Towns, Mac v3) it is
+solid. Every length is in output pixels.
+
+```ini
+[shadow]
+mode=game           ; game (default) | none | drop | outline | stroke
+color=0             ; outline colour (palette index)
+width=1.5           ; outline radius in output px, to a quarter (0..8)
+style=round         ; round | square | legacy (the pre-C19 binary look)
+offset=2            ; shadow distance; also the width when width= is absent
+shadow=-1,1         ; a shadow of the outline at dx,dy output px; none = off
+shadow_color=0      ; defaults to color
+shadow_alpha=60     ; 0..100 on a blended screen; keyed: >= 50 solid, else none
+```
+
+`mode=game` follows the game. With a kor-trs v1-v6 patch that is byte 1 of the
+charset's `korean%02d.fnt`, where `s` is the scale:
+
+| byte | patch renderer | hi-res layer |
+|---|---|---|
+| 1 | none | none |
+| 0, 4 and up | 8-direction outline | round outline, 0.75 x s wide |
+| 2 | drop (1,1) | drop of the glyph's coverage by s/2, rounded up |
+| 3 | outline + lower-left | the outline plus a copy moved (-s/2, +s/2) |
+
+A game with no patch font (English, a UTF-8 translation) draws nothing under
+`mode=game`. v7 (Full Throttle, The Dig, COMI) draws no decoration.
+
+Existing maps change look: an `offset=N` map now gets a round N px outline
+instead of the old square ring; `style=legacy` brings the old one back, without
+the gaps it had above 1 px. Engine-side detail:
+`engines/scumm/HIRES_TEXT_DECORATIONS.md` and `graphics/hires_text/README.md`
+("Decoration (C19)").
 
 ### SCI with a UTF-8 translation (C11 T5)
 
