@@ -412,7 +412,14 @@ No extraction step (ttc2ttf.py) is needed any more.
 ### Heavier text: a heavier face, or `[hires] gamma=` (C20)
 
 Thin faces look grey once text is blended over an outline (MI2 Korean in
-Apple SD Gothic Neo Regular). Prefer a heavier face: on macOS,
+Apple SD Gothic Neo Regular). The recommended Korean face is **NanumGothic
+Bold** (Naver, OFL, all 11172 syllables drawn; chosen in C22 from the
+공유마당 free-font board): heavier than Apple SD Gothic Neo Bold at game sizes
+(mean text level 205 against 189) with dense syllables still open, and it may
+be shipped with a map (keep its OFL text next to it). It has no Hanja; for
+text with Hanja use Noto Sans KR Bold. Beware free fonts that map all 11172
+syllables but draw only 2350 (many municipal fonts do): the missing ones come
+out blank. On macOS without extra fonts,
 AppleSDGothicNeo.ttc face 6 is Bold, which C20 measured as the best
 default for Korean (mean text level 190 against Regular's 171, and dense
 syllables such as 췄 떡 밥 stay open):
