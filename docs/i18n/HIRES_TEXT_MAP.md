@@ -175,6 +175,31 @@ one warning and no effect (see "Warnings" below).
 optionally `[font.4:pc98]`. `[font.04]` or `[font.4:]` (an empty
 qualifier) are rejected with a warning, not silently treated as `[font.4]`.
 
+### The same keys on SCUMM (C11 T6)
+
+SCUMM (v1-v6, hi-res text layer) reads the keys of the table above with the
+same meanings, with these differences
+(`engines/scumm/HIRES_TEXT.md`, "Per-charset faces and per-glyph placement"):
+
+| Key | SCUMM |
+|---|---|
+| `[font.N]` | `N` is the SCUMM **charset id**, 0..19 (not an SCI font id) |
+| `[font.N] bitmap=` | an SVFN for that charset, relative to the map, tried before its faces |
+| `[hires] face=`, `[font.N] face=` | a face or a comma-separated chain; the first face with the character draws it, then the game's font. Else `[fonts] default=`; the ini `hires_text_font` overrides all |
+| `[hires] size=`, `[font.N] size=` | the characters' pixel size (as SCI); without one, the face is opened at the game cell times the scale, its line filling the cell (as before) |
+| `[latin] mode=`, `[font.N] latin=` | `off`/`half`/`fullwidth`/`proportional` as on SCI; the **default is `proportional`** (SCUMM always drew ASCII with the replacement); `[latin] enabled=false` means `off` |
+| `[latin] metrics=`, `[font.N] metrics=` | ASCII under `proportional`: `game` = the game's width, `font` = `latinAdvanceGamePx()` of the face's advance. `[font.N] metrics=` also sets wide and other glyphs for that charset; the ini `hires_text_metrics` wins over both |
+| `[render] metrics=` | unchanged: wide glyphs (Hangul, kanji) keep the cell rule with it |
+
+Glyphs are placed by their own metrics: a wide glyph keeps the game's cell
+rule (a legacy layout does not move), a combining mark advances 0 and is
+drawn against the previous base, every other glyph advances by the face
+(`metrics=font` unless a key says `game`), and a glyph under
+`metrics=game` is centred in its game cell. With a translation loaded,
+each face is checked against 64 of its code points (one warning per face).
+A SCUMM map with none of `[hires] face/size`, `[font.N]` and
+`[latin] mode/space` is read exactly as before.
+
 **Not yet implemented**, though a map that already has them for SCUMM
 will not warn: `[shadow]`, `baseline=`, and `[hires] scale=` beyond what
 the compositor already fixes. Per-glyph kerning/centring in proportional
