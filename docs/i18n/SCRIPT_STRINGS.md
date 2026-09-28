@@ -102,6 +102,10 @@ is keyed with room "any", so only an any-room entry answers it.
 
 ## Building a table
 
+The whole translation pipeline this table is one step of (sheet, batch
+translation, script-string classification, packaging) is in
+[SCI_TRANSLATION_WORKFLOW.md](SCI_TRANSLATION_WORKFLOW.md).
+
 Set `dump_script_strings=true` in the game's config section and start the
 game. At startup the engine loads every script and logs one line per string
 (`debug()` with no level, so no `-d` flag is needed; the lines go to the
