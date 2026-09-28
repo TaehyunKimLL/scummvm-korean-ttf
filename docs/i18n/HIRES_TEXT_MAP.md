@@ -902,8 +902,11 @@ NanumGothic Bold at 16 px (font 0) has its baseline and its ascent both at
 14, the game's own: `align=game` and `align=font` draw it the same, with
 no shift.
 
-The shipped `kq1-ko.map` is `align=game baseline=-2` (the user's pick,
-and the measurement agrees) with the decoupled 16 px cell; `cell=glyph`
+The shipped `kq1-ko.map` is `align=game baseline=0` with the decoupled
+16 px cell. `baseline=-2` was the first pick (it keeps Hangul within the
+game's cap height), but with glyphs no longer clipped at the cell the
+screen balance decides: at 0 the text is centred in the dialogue box and
+on the title buttons and Latin stays on the game's own baseline. `cell=glyph`
 (the old 18 px cell) was captured beside it for comparison and is not
 shipped: it keeps the wider spacing.
 
