@@ -214,6 +214,12 @@ diagnostic `hires_text_log` ini key; see `HIRES_COMPOSITOR_DESIGN.md`
 | `4` | Title screen and its menu ("게임시작", "이어서 계속하기") |
 | `300` | Dialogue and narration boxes - the text players spend the most time reading |
 
+The map ScummVM ships for it is `dists/engine-data/hires_text/maps/kq1-ko.map`
+(C41; see "SCI: glyph size, cell and baseline" below). Set
+`hires_text_map=data:hires_text/maps/kq1-ko.map` for the game, or copy the
+file into the game folder as `hires_text.map`; nothing picks it up
+automatically. The maps below are older examples of the Latin modes.
+
 Here is a map that was built and verified against exactly this game (the
 face paths are macOS system fonts, used for local testing; ship your own
 TTFs alongside the map instead):
@@ -324,13 +330,19 @@ one warning and no effect (see "Warnings" below).
 | `[hires]` | `font=` (or `face=`) | The face a `[font.N]` that names none falls back to - a `[fonts]` name, or a path |
 | `[hires]` | `size=` | Pixel size, same fallback role |
 | `[hires]` | `pixel=` (C28) | Design size (in px) of a pixel-grid font; fallback role, same as `size=` - see "Pixel-locked fonts" below |
+| `[hires]` | `cell=` (C41, SCI) | `game` (default) \| `glyph`: fallback for `[font.N] cell=` - see "SCI: glyph size, cell and baseline" below |
+| `[hires]` | `align=` (C41, SCI) | `game` (default) \| `font` \| `cell`: fallback for `[font.N] align=` |
+| `[hires]` | `baseline=` (C41, SCI) | `<+-px>`: fallback for `[font.N] baseline=` |
 | `[fonts]` | *name*`=`*file* | Face name -> file, referenced by `font=`/`face=`/`latin_font=`/`latin_face=` elsewhere. Case-insensitive names; relative paths are taken against the directory holding the map |
 | `[latin]` | `mode=` | `off` \| `half` \| `fullwidth` \| `proportional` - the default for every font id |
 | `[latin]` | `font=` (or `face=`) | Face for the Latin range; absent means the font's own face draws it |
 | `[latin]` | `space=` | `keep` \| `fullwidth` (fullwidth mode only) |
 | `[latin]` | `metrics=` | `game` \| `font` (proportional mode only) |
 | `[font.N]` | `face=` (or `font=`) | Face for this font id |
-| `[font.N]` | `size=` | Pixel size for this font id |
+| `[font.N]` | `size=` | Pixel size for this font id. On SCI (C41) the size the glyphs are drawn at, not the layout cell (see `cell=`) |
+| `[font.N]` | `cell=` (C41, SCI) | `game` (default): the text is laid out in the engine's 16 px cell whatever `size=` is; a larger glyph draws over its neighbours. `glyph`: the cell is `size=`, as before C41 (wider spacing, other line breaks) |
+| `[font.N]` | `align=` (C41, SCI) | Where the face sits vertically. `game` (default): its baseline on the game font's baseline. `font`: its own line, line top on the text line's top, baseline its ascent below. `cell`: the probe fit's box centred on the cell (before C41) |
+| `[font.N]` | `baseline=` (C41, SCI) | `<+-px>`, whole hi-res px within -64..64: moves the glyphs down (negative: up) from where `align=` put them; the layout does not move |
 | `[font.N]` | `pixel=` (C28) | Design size (in px) of a pixel-grid font for this font id, overriding `[hires] pixel=` |
 | `[font.N]` | `latin=` | Overrides `[latin] mode=` for this font id |
 | `[font.N]` | `latin_font=` (or `latin_face=`) | Overrides `[latin] font=` for this font id |
@@ -443,9 +455,9 @@ older "break anywhere" rule, so a map that turns hi-res text off leaves
 line breaking exactly as it always was. `[layout] hangul=any` restores
 the "break anywhere" rule with hi-res on.
 
-**Not yet implemented**, though a map that already has them for SCUMM
-will not warn: `baseline=`, and `[hires] scale=` beyond what the
-compositor already fixes. Per-glyph kerning/centring in proportional
+**Not yet implemented**, though a map that already has them will not
+warn: `baseline=`, `cell=` and `align=` on SCUMM and AGS (SCI only, C41),
+and `[hires] scale=` beyond what the compositor already fixes. Per-glyph kerning/centring in proportional
 mode and the legacy SJIS face are also not implemented yet.
 
 **`[glyphs]` is parsed, but not yet applied on SCI.** The shared parser
@@ -583,7 +595,7 @@ pixels, so its grid is never fractional.
 | Mode | Pixel size chosen | Layout cell | Fits to |
 |---|---|---|---|
 | Line fit (no `size=`, no `pixel=`) | `round(upm x cell / (winAscent+winDescent))` | the game's own cell | the line |
-| `size=N` | whatever makes the probe set (Hangul, `A g j y Å`, brackets, CJK quotes) fit N rows | **becomes N** (`size=` changes the layout cell, not just the raster) | the probe set |
+| `size=N` | whatever makes the probe set (Hangul, `A g j y Å`, brackets, CJK quotes) fit N rows | SCUMM, AGS: **becomes N** (`size=` changes the layout cell, not just the raster). SCI since C41: the engine's 16 px (`cell=game`), N only with `cell=glyph` | the probe set |
 | `pixel=D` | the largest multiple of D that fits the cell (D itself in a smaller cell) | the game's cell (unchanged) | nothing - no probe, no line, no translation sample |
 
 - `[hires] pixel=` applies to every font id; `[font.N] pixel=` overrides it
@@ -693,6 +705,7 @@ family - read it before shipping a translation that uses one of these.
 | Black Han Sans | `blackhansans/BlackHanSans-Regular.ttf` | OFL 1.1, no RFN | Korean heavy display face (chapter cards, credits). 2581 syllables (KS X 1001's 2350 plus 231) - chain a full-coverage face after it |
 | Coustard | `coustard/Coustard-Black.ttf` | OFL 1.1, no RFN | Latin heavy serif display face (`latin_font=` beside Black Han Sans) |
 | Nanum Myeongjo Bold | `nanummyeongjo/NanumMyeongjo-Bold.ttf` | OFL 1.1, Nanum RFNs | Korean serif (light display text, e.g. MI1/MI2 verb charset). All 11172 syllables |
+| Gowun Batang Bold (C41) | `gowunbatang/GowunBatang-Bold.ttf` | OFL 1.1, no RFN | Korean batang (serif) with a heavier, rounder stroke than Nanum Myeongjo, and its own Latin; KQ1-ko's dialogue and title fonts. All 11172 syllables. 8.2 MB |
 | EB Garamond | `ebgaramond/EBGaramond-VF.ttf` | OFL 1.1, no RFN | Latin old-style serif (`latin_font=` beside Nanum Myeongjo). Variable font |
 | Nanum Pen Script | `nanumpenscript/NanumPenScript-Regular.ttf` | OFL 1.1, Nanum RFNs | Korean handwriting (notes, e.g. Blackwell). All 11172 syllables |
 | Caveat | `caveat/Caveat-VF.ttf` | OFL 1.1, no RFN | Latin handwriting (`latin_font=` beside Nanum Pen Script). Variable font |
@@ -722,6 +735,7 @@ family - read it before shipping a translation that uses one of these.
 | `korean-default.map` | SCUMM v5/v6, SCI, AGS - a starting point for any Korean translation | `scale=2, alpha=true`, NanumGothic Bold via `data:`, blended |
 | `ft-keyed-galmuri9.map` | Full Throttle (SCUMM v7) Korean, keyed 1x | Galmuri9 at its 10 px design size, `cp949`, no `size=` (a size key would shrink it off its pixel grid) |
 | `scumm-2x-neodgm.map` | SCUMM v5/v6 Korean, keyed 2x, DOS look | Neo둥근모 held at `size=16` per charset (its design size) |
+| `kq1-ko.map` (C41) | King's Quest I (SCI) Korean UTF-8 translation | Gowun Batang Bold at `size=18 baseline=-2` in the 16 px cell for the dialogue (font 300) and title menu (font 4), NanumGothic Bold for the status/parser line (font 0), Latin proportional by the face |
 | `mi1-styled.map` | The Secret of Monkey Island (UTE) Korean | Per-charset styled faces - Black Han Sans + Coustard for the heavy display charset, Nanum Myeongjo Bold + EB Garamond for the light-serif charset, NanumGothic Bold elsewhere |
 
 Copy one into a game folder as `hires_text.map`, or point
@@ -783,7 +797,7 @@ With a translation loaded:
 | Key | SCI |
 |---|---|
 | `[hires] face=`, `[font.N] face=` | a face or a comma-separated chain; the first face with the character draws it, then the `.uni` bundle (presented in the faces' cell), then the game's font. Each face is checked against 64 of the translation's code points: one warning per face naming what it lacks, or that it draws combining marks as spacing glyphs |
-| `[hires] size=`, `[font.N] size=` | as before; font ids with the same chain at different sizes get separate chains |
+| `[hires] size=`, `[font.N] size=` | the size the glyphs are drawn at; the layout cell stays 16 px unless `cell=glyph` (C41). Font ids with the same chain at different sizes get separate chains |
 | `[layout] hangul=`, `kinsoku=`, `thai=` | line breaking of the translation: defaults `word`, `on`, `on` (SCI always broke Hangul at spaces) |
 
 Glyphs beyond ASCII are placed by their own metrics: a glyph the face keeps
@@ -800,6 +814,98 @@ SCI1.1 release, or of KQ6 on DOS with hi-res graphics on, takes that
 platform's own driver, which has no text plane - its glyphs are not shown
 (one warning: "the graphics driver for this game ... does not composite
 the text layer"). Use the DOS release, or turn hi-res graphics off.
+
+### SCI: glyph size, cell and baseline (C41)
+
+`[source]` engine `cb0844aeb3`, `c9ea1b9bfd`, merged into `i18n` as `d1efefb4ae`.
+`[measured]` runs/c41 in the harness repo: `sheets/*.png` (2x crops of
+every variant below), `shots/<variant>/`, `maps/`.
+
+Before C41 a TrueType face on the SCI hi-res plane was laid out in the cell
+it was drawn in, and placed by centring the probe fit's ink box in it. On
+KQ1-ko with Gowun Batang Bold:
+
+- `size=16`: whole glyphs, but small, and high in the line: the ink box
+  includes descenders and brackets, so the Hangul stood above the row the
+  game's own letters stand on, and the game font's comma and period (Latin
+  was still the game's bitmap font) hung below them;
+- `size=17`: the final consonants lost their bottom stroke. The fit ran
+  out of its raster budget at a 15 px em and the ink below the 17 px cell
+  was cut when the glyph was rasterised;
+- `size=18`: whole glyphs, but every Hangul syllable advanced 9 game px
+  instead of 8: wider spacing, other line breaks ("알 수" wrapped), and the
+  title menu's longest label reached its button's edge.
+
+Since C41 three keys, per `[font.N]` with `[hires]` as the fallback, set
+the size, the cell and the placement apart:
+
+| Key | Values | What it does |
+|---|---|---|
+| `size=` | px | the size the glyphs are drawn at (the probe fit as before: 18 gives Gowun Batang Bold a 16 px em) |
+| `cell=` | `game` (default), `glyph` | `game`: the layout cell stays the engine's 16 px whatever `size=` is - a wide glyph advances 8 game px, line height and wrapping are the game's. `glyph`: the cell is `size=`, the behaviour before C41 |
+| `align=` | `game` (default), `font`, `cell` | `game`: the face's baseline on the game font's baseline. `font`: the face's own line - its line top on the text line's top, its baseline its ascent below, whatever the game font is. `cell`: the probe fit's box centred on the cell (before C41) |
+| `baseline=` | `<+-px>` (-64..64) | hi-res px added after `align=`, positive down; `-2` lifts the glyphs 2 px |
+
+- **A glyph larger than the cell is not clipped.** A wide glyph's raster
+  is centred on its cell (18 in 16: one pixel over each side); what does
+  not fit draws over the neighbouring pixels of the text layer, above and
+  below the cell too. It is clipped only at the edge of the port it is
+  drawn in - for a window, the area its removal restores - so closing a
+  box or redrawing the status line erases all of it. `[measured]` The text
+  layer after closing the "look" and "xyzzy" boxes equals the one before
+  they opened, 0 pixels different, in every variant.
+- **Rows of headroom.** SCI opens each face with `size/4` empty rows above
+  and below its raster cell (`TtfGlyphSource::padRows()`), so a glyph the
+  fit could not bring inside the cell is kept whole; `size=17` now draws
+  whole.
+- **How the baselines are measured.** The game font's baseline is the row
+  under the lowest ink of its capitals and digits (`HIEXZ0`, the most
+  common row), times 2. The face's is the same rule on its glyphs as
+  rasterised (coverage >= 50%). Both are in the `-d1` log:
+  `SCI: font 300 glyphs: 18px face (16px em, 28 rows) in a 16px cell,
+  align 0: baseline row 21, game's 16, line top 3, shift -2 -> offset (-1, -7)`.
+  `align=game` needs both; a font id with no resource font falls back to
+  the centred placement.
+- **Latin through the face.** With `[latin] mode=proportional
+  metrics=font`, ASCII is drawn by the same face and advances by its own
+  widths, so Hangul, Latin letters, digits, quotes and commas stand on one
+  baseline. This changes where lines break (the face's space is narrower
+  than the game font's).
+- **Every SCI TrueType face is placed this way now**, not only KQ1's: with
+  no key set, `align=game` moves a 16 px face from the centred position to
+  the game font's baseline. `align=cell cell=glyph` gives back the
+  placement and layout from before C41. `hires_text_font_size=` (ini) is
+  a `size=` and no longer changes the cell either.
+
+`[measured]` KQ1's own fonts (`sciext.py` + the resource headers):
+
+| Font id | Line height | Capitals | x-height | Baseline (game px) | Baseline (hi-res) |
+|---|---|---|---|---|---|
+| 300 dialogue | 12 | rows 0-7 | 6 | 8 | 16 |
+| 4 title menu | 9 | rows 0-6 | 5 | 7 | 14 |
+| 0 status, parser | 8 | rows 0-6 | 5 | 7 | 14 |
+
+Gowun Batang Bold at `size=18` is fitted to a 16 px em; its Hangul ink
+reaches about 2 px below its baseline. Hangul ink rows in the dialogue
+box, line top = 0 (the game's capitals: 0..16):
+
+| Variant | Hangul ink | Note |
+|---|---|---|
+| before C41, `size=16` | 3..16 | small, high |
+| before C41, `size=18` | 3..18 | cell 18: other line breaks |
+| **`align=game baseline=-2` (shipped)** | **1..17** | on the game's baseline, the height of its capitals |
+| `align=game baseline=0` | 3..19 | 2 px below the game's capitals |
+| `align=font baseline=0` | 5..21 | face ascent 18: 2 px lower still; font 4 is 4 px lower and its labels touch the bottom of their buttons |
+| `align=font baseline=-2` | 3..19 | |
+
+NanumGothic Bold at 16 px (font 0) has its baseline and its ascent both at
+14, the game's own: `align=game` and `align=font` draw it the same, with
+no shift.
+
+The shipped `kq1-ko.map` is `align=game baseline=-2` (the user's pick,
+and the measurement agrees) with the decoupled 16 px cell; `cell=glyph`
+(the old 18 px cell) was captured beside it for comparison and is not
+shipped: it keeps the wider spacing.
 
 ### SCI: legacy Korean patches and `text_encoding=` (C38)
 
