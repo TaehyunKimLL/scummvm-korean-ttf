@@ -29,7 +29,12 @@ the warnings a bad map produces.
 ## Where it lives
 
 - `hires_text.map` in the game's own directory, or
-- the file named by the ini key `hires_text_map` (game domain).
+- the file named by the ini key `hires_text_map` (game domain) - an
+  ordinary path, or a `data:` path naming a map shipped with ScummVM
+  (`hires_text_map=data:hires_text/maps/kq1-ko.map`), found in the
+  extrapath or in any folder ScummVM finds its own data in: next to
+  `scummvm.exe` on Windows, the app bundle's Resources on macOS,
+  `DATA_PATH` on Unix (see [`data:` paths](#bundled-fonts-and-maps-data-paths-c29)).
 
 An empty `hires_text_map=` names nothing (one warning, no map is used,
 the game directory's own `hires_text.map` is *not* tried instead). A
@@ -672,21 +677,37 @@ ko=data:hires_text/fonts/nanumgothic/NanumGothic-Bold.ttf
      `dists/engine-data/` is put in the session domain automatically, so
      `data:` finds the bundled fonts with no extra setup;
   5. the **ScummVM data directory** (`DATA_PATH`, compiled in) - where
-     `make install-data` puts a copy, at `<datadir>/hires_text/`.
+     `make install-data` puts a copy, at `<datadir>/hires_text/`;
+  6. **every folder in SearchMan** (C44, `i18n` `191d9b05cb`), in its
+     priority order - the same places ScummVM opens its own `.dat` engine
+     data from: the **current folder** (`.`; on Windows that is the folder
+     holding `scummvm.exe` when it is started from Explorer or a shortcut),
+     the **macOS app bundle's `Resources`**, `DATA_PATH`, the extrapaths,
+     the game's folder. Only each folder's root is used, not the depth
+     SearchMan searches it to (`.` is searched one level deep; a `data:`
+     path is three or four), and archives that are not folders (zips,
+     Win32 resources) are skipped [source: `HiResFontMap::searchSetRoots()`,
+     `graphics/hires_text/font_map.cpp`]. So a Windows package that ships
+     `hires_text/` next to `scummvm.exe` needs no extrapath.
 
   A file present in more than one root is taken from the first root that
   has it. When no root has the file, the value is used as-is (so it still
   fails to open, the normal way) and one warning is logged first:
-  `HiResText: 'data:X' is not in the extrapath or the ScummVM data
-  directory`.
+  `HiResText: 'data:X' is not in the extrapath or any ScummVM data
+  folder` (before C44: `... or the ScummVM data directory`).
 - **From a source tree**, run with `--extrapath=dists/engine-data` (or rely
   on the dev-default root above).
-- **Packaging gap.** Only the POSIX `make install`/`install-data` carries
-  `hires_text/` into the installed tree. The macOS `.app` bundle,
-  dist-generic and the other port packages do **not** ship it, and `data:`
-  does not search the bundle's Resources folder. On those builds, copy
-  `hires_text/` somewhere and point `extrapath` at the folder that holds
-  it.
+- **Packaging.** The POSIX `make install`/`install-data` carries
+  `hires_text/` into `DATA_PATH`. The fork's Windows package
+  (`scummvm-i18n-win64-<date>.zip`, built on hpz2) ships `hires_text/`
+  next to `scummvm.exe`, which step 6 finds. The upstream macOS `.app`
+  bundle, dist-generic and the other port packages do **not** copy it yet;
+  step 6 finds it in the bundle's `Resources/hires_text/` once it is put
+  there, otherwise copy `hires_text/` somewhere and point `extrapath` at
+  the folder that holds it. On Windows, a launch whose working folder is
+  not the exe's folder (a shortcut with another "Start in") does not see
+  it either - set `extrapath` then [unmeasured: the Windows build was not
+  run; no Windows or Wine on the build host].
 
 #### Bundled fonts
 
