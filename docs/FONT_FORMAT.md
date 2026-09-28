@@ -28,7 +28,7 @@ SVFN 은 그 세 가지를 채운다. 8bpp 알파, 글자별 전진 폭, 자기 
 | 0 | 4 | `magic` | `"SVFN"` |
 | 4 | 2 | `version` | 1 |
 | 6 | 2 | `flags` | 아래 표 |
-| 8 | 1 | `bpp` | 1 또는 8 |
+| 8 | 1 | `bpp` | 1, 2 또는 8 (4절) |
 | 9 | 1 | `shadow` | 기존 그림자 방식 0~3, 없으면 0xFF |
 | 10 | 2 | `codePage` | 949 · 932 · 936 · 950, 또는 0 |
 | 12 | 2 | `glyphCount` | 글리프 수 |
@@ -72,16 +72,26 @@ SVFN 은 그 세 가지를 채운다. 8bpp 알파, 글자별 전진 폭, 자기 
 `glyphCount` 개의 셀이 위에서 아래로, 왼쪽에서 오른쪽으로 늘어선다.
 
 ```
-glyphStride = (bpp == 1) ? ((cellWidth + 7) / 8) * cellHeight
-                         : cellWidth * cellHeight
+rowPitch    = (bpp == 1) ? (cellWidth + 7) / 8
+            : (bpp == 2) ? (cellWidth + 3) / 4
+            :              cellWidth
+glyphStride = rowPitch * cellHeight
 
 i 번째 글리프 = dataOffset + i * glyphStride
 ```
 
 - **1bpp** — 한 행이 `(cellWidth+7)/8` 바이트. 최상위 비트가 왼쪽 픽셀.
+- **2bpp** — 한 행이 `(cellWidth+3)/4` 바이트. 한 바이트에 네 픽셀,
+  최상위 비트 쌍이 왼쪽 픽셀이다 (픽셀 x 는 바이트 `x/4` 의
+  `(byte >> (6 - (x%4)*2)) & 3`). 값은 덮임 단계 0~3 이고, 읽는 쪽은
+  단계 × 85 (0, 85, 170, 255) 로 펼친다. 행 끝의 남는 비트 (18px 이면 36비트라
+  마지막 바이트의 아래 4비트) 는 0 이어야 한다.
 - **8bpp** — 한 행이 `cellWidth` 바이트. 값은 덮임 정도 0~255.
 
 8bpp 값은 그대로 알파로 쓴다. 0 은 완전 투명, 255 는 완전 불투명이다.
+2bpp 는 같은 알파를 네 단계로 줄인 것이다. `mkfont.py --bpp 2` 는 0~255 를
+`(v * 3 + 127) // 255` 로 반올림하므로 8bpp 로 구운 것과 픽셀마다 43 이하로
+다르고, 크기는 8bpp 의 약 1/4 이다 (18px 이면 글리프당 90바이트).
 게임 팔레트와 섞는 일은 합성 단계가 맡는다.
 
 ## 5. 글리프 순서
@@ -108,6 +118,9 @@ python3 scripts/mkfont.py neodgm.ttf out.fnt --size 16 --bpp 1
 
 # 24x24 8bpp 알파, 가변폭
 python3 scripts/mkfont.py NanumGothic.ttf out.fnt --size 24 --bpp 8 --variable
+
+# 18x18 2bpp 알파 (네 단계), cp949 가 담는 글자 전부 (--unicode: 코드 포인트 순서, 17143자)
+python3 scripts/mkfont.py NanumGothic-Bold.ttf out.fnt --size 18 --bpp 2 --unicode ascii,cp949
 
 # 일본어
 python3 scripts/mkfont.py misaki.ttf out.fnt --size 16 --codepage 932
