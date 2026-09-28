@@ -801,6 +801,63 @@ platform's own driver, which has no text plane - its glyphs are not shown
 (one warning: "the graphics driver for this game ... does not composite
 the text layer"). Use the DOS release, or turn hi-res graphics off.
 
+### SCI: legacy Korean patches and `text_encoding=` (C38)
+
+A code-page (EUC-KR) Korean fan patch that rewrites the game's own
+resources is detected as the English release. Two ini keys turn its text
+on; either is enough:
+
+| ini key | Effect on SCI |
+|---|---|
+| `text_encoding=` | **What the text's bytes mean.** Same name and values as the AGS key: `auto` (default), `euc-kr`, `cp949`, `utf8`, `utf-8`, `ascii`. An explicit value beats detection, the `Text.MAP` overlay and the `sci-<lang>.str` manifest; `auto` is exactly the behaviour without the key. See the table below |
+| `language=` | **The game's language**, as scripts, detection-keyed code and file names see it: the `sci-<lang>.str` table and manifest are looked up by it; the Korean `message.map` handling, game-specific Korean code (GK1) and the Hebrew/Russian save-name conversion follow it. With `text_encoding=auto` it also picks the code page (`ko` → CP949, `ja` → Shift-JIS, ...) and turns the Korean path on for `ko` |
+
+| `text_encoding` | code page | heap strings UTF-8 | Korean path (EUC-KR decoding, `korean.fnt` / font banks, font 1001 switch, upscaled driver) |
+|---|---|---|---|
+| `auto` / unset | from `language=` / detection | detection entry or `sci-<lang>.str` manifest (never with `Text.MAP`) | `language=ko` / detected Korean / `Text.MAP` |
+| `euc-kr`, `cp949` | CP949 | no (even with a manifest) | **on, with no `language=`** |
+| `utf8`, `utf-8` | from `language=` | **yes** (even with no manifest) | follows `language=` |
+| `ascii` | Latin-1 | no | off (even with `language=ko`) |
+
+An unknown value warns once ("unknown text_encoding 'x', using auto").
+
+Where the Korean glyphs come from, in this order:
+
+1. **`korean.fnt`** in the game directory (SCVMSJIS). Format **v3** is
+   what the Korean SCI/SCUMM patches have always shipped. Format **v4**
+   (Leisure Suit Larry 1 VGA Korean) adds a 128-byte per-ASCII advance
+   table after the 18-byte header and stores the Latin glyphs 16 px wide:
+   Latin *inside a Korean line* is then drawn from `korean.fnt` with those
+   proportional advances (LSL1's scripts select font 1001 for such lines).
+   English-only lines keep the game's own font. Measured on LSL1 room 100,
+   `"HOTEL"이라더니, 간판부터 정말 'HOT'하군!`.
+2. **Font banks** (no `korean.fnt`, and no hi-res face configured): a
+   game that carries its Hangul as FONT resources 500..524, one per lead
+   byte 0xB0..0xC8, glyph slot = trail byte (Conquests of Camelot's Korean
+   beta 5 for its patched DOS interpreter), is drawn from them at native
+   resolution; font 104 (the intro/ending outline font) uses 525..549.
+   All 25 resources of a set must exist with 255 glyphs.
+3. A **hi-res face** (`hires_text_font=`, `hires_text.map`): the Hangul
+   syllables are drawn by it on the text plane, as for any CJK game. When a
+   face is configured it wins over the font banks.
+
+EUC-KR Hangul is decoded from a built-in KS X 1001 table, so these games no
+longer need `encoding.dat` (without it, every syllable used to come out as
+U+FFFD: "font.0 is missing glyph 65533" and empty buttons).
+
+Examples:
+
+```ini
+[lsl1sci-ko]
+gameid=lsl1sci
+text_encoding=euc-kr        ; or language=ko
+
+[camelot-ko]
+gameid=camelot
+text_encoding=euc-kr        ; native 8x8 glyphs from the game's font banks
+; hires_text_font=/System/Library/Fonts/AppleSDGothicNeo.ttc   ; or: hi-res TTF instead
+```
+
 ### AGS (C11 T8)
 
 AGS reads the map only when the game directory has `hires_text.map` or the
@@ -966,6 +1023,7 @@ The exact warning text for each bound and for the table limit is in
 | `hires_text_map` | Which map file is read, instead of `hires_text.map` |
 | `hires_text_scale` | **AGS only (C23).** The display/text scale N (1-3), overriding `[hires] scale=`; see "AGS hi-res text at N× (`[hires] scale=`, C23)" above |
 | `hires_text_log` | Diagnostic: logs each line drawn and which face drew each glyph (used to build the font-id table above) |
+| `text_encoding` | Not a map key: what the game's text bytes mean (`auto`/`euc-kr`/`cp949`/`utf8`/`utf-8`/`ascii`). On SCI it beats detection and manifests (see "SCI: legacy Korean patches and `text_encoding=` (C38)"); on AGS it names a `.tra`'s encoding; on SCUMM `utf8` marks an unmarked bundle |
 
 These are meant for a player overriding a translation's choices (or for
 testing), not for the translation itself - a map is the only way to give

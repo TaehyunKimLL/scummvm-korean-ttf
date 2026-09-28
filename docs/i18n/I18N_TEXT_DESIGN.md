@@ -676,7 +676,7 @@ the game will draw). C8 T3 measures ms/glyph; `[unmeasured]` here.
 
 | Engine | Today | After |
 |---|---|---|
-| SCI | `hires_text_*` honoured only for CJK code pages (A1) | honoured when `heapStringsAreUtf8()` or a legacy CJK page; warning text "no translation and no CJK code page" |
+| SCI | `hires_text_*` honoured only for CJK code pages (A1) | honoured when `heapStringsAreUtf8()` or a legacy CJK page; warning text "no translation and no CJK code page". Plus `text_encoding=` (C38, the AGS key's names and values): an explicit value beats detection and the manifest in `getSciLanguageCodePage()`, `heapStringsAreUtf8()` and `usesKoreanText()` (every former `KO_KOR` gate); `euc-kr` alone turns the Korean path on without `language=`; `auto` = unchanged (`HIRES_TEXT_MAP.md`, "SCI: legacy Korean patches") |
 | SCUMM | honoured whenever the hi-res layer is on (`hires_text=false` turns it off) | unchanged; plus `text_encoding=utf8` (forces UTF-8 for an unmarked bundle) |
 | AGS | `text_encoding` (C8 T6) | unchanged; map read only when present (plan 5 T8 scope rule) |
 | Grim | none | none (`.laf.txt` names faces) |
