@@ -735,7 +735,7 @@ family - read it before shipping a translation that uses one of these.
 | `korean-default.map` | SCUMM v5/v6, SCI, AGS - a starting point for any Korean translation | `scale=2, alpha=true`, NanumGothic Bold via `data:`, blended |
 | `ft-keyed-galmuri9.map` | Full Throttle (SCUMM v7) Korean, keyed 1x | Galmuri9 at its 10 px design size, `cp949`, no `size=` (a size key would shrink it off its pixel grid) |
 | `scumm-2x-neodgm.map` | SCUMM v5/v6 Korean, keyed 2x, DOS look | Neo둥근모 held at `size=16` per charset (its design size) |
-| `kq1-ko.map` (C41) | King's Quest I (SCI) Korean UTF-8 translation | Gowun Batang Bold at `size=18 baseline=-2` in the 16 px cell for the dialogue (font 300) and title menu (font 4), NanumGothic Bold for the status/parser line (font 0), Latin proportional by the face |
+| `kq1-ko.map` (C41) | King's Quest I (SCI) Korean UTF-8 translation | Gowun Batang Bold at `size=18 baseline=0` in the 16 px cell for the dialogue (font 300) and title menu (font 4), NanumGothic Bold for the status/parser line (font 0), Latin proportional by the face |
 | `mi1-styled.map` | The Secret of Monkey Island (UTE) Korean | Per-charset styled faces - Black Han Sans + Coustard for the heavy display charset, Nanum Myeongjo Bold + EB Garamond for the light-serif charset, NanumGothic Bold elsewhere |
 
 Copy one into a game folder as `hires_text.map`, or point
@@ -893,8 +893,8 @@ box, line top = 0 (the game's capitals: 0..16):
 |---|---|---|
 | before C41, `size=16` | 3..16 | small, high |
 | before C41, `size=18` | 3..18 | cell 18: other line breaks |
-| **`align=game baseline=-2` (shipped)** | **1..17** | on the game's baseline, the height of its capitals |
-| `align=game baseline=0` | 3..19 | 2 px below the game's capitals |
+| `align=game baseline=-2` | 1..17 | the height of the game's capitals; text rides high in the box and on the title buttons |
+| **`align=game baseline=0` (shipped)** | **3..19** | Latin exactly on the game's baseline, Hangul 2-3 px below it as in print; text centred in the box and on the buttons |
 | `align=font baseline=0` | 5..21 | face ascent 18: 2 px lower still; font 4 is 4 px lower and its labels touch the bottom of their buttons |
 | `align=font baseline=-2` | 3..19 | |
 
