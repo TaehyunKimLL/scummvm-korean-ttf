@@ -119,7 +119,9 @@ python3 scripts/mkfont.py neodgm.ttf out.fnt --size 16 --bpp 1
 # 24x24 8bpp 알파, 가변폭
 python3 scripts/mkfont.py NanumGothic.ttf out.fnt --size 24 --bpp 8 --variable
 
-# 18x18 2bpp 알파 (네 단계), cp949 가 담는 글자 전부 (--unicode: 코드 포인트 순서, 17143자)
+# 18x18 2bpp 알파 (네 단계), cp949 가 담는 글자 전부 (--unicode: 코드 포인트 순서).
+# 요청하는 코드 포인트는 17143개지만 글꼴에 없는 글자는 빠진다: NanumGothic 은
+# 한자가 없어 남는 글리프는 11,695개다
 python3 scripts/mkfont.py NanumGothic-Bold.ttf out.fnt --size 18 --bpp 2 --unicode ascii,cp949
 
 # 일본어
